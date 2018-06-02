@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <dlfcn.h>
 #include <stdint.h>
+#include <string>
 
 WasmSandbox* WasmSandbox::createSandbox(const char* path)
 {
@@ -28,7 +29,9 @@ WasmSandbox* WasmSandbox::createSandbox(const char* path)
 
 void* WasmSandbox::symbolLookup(const char* name)
 {
-    void** symbolAddr = (void**)(dlsym(lib, "Z__simpleAddNoPrintTestZ_iii"));
+    std::string exportName = "_E_";
+    exportName += name;
+    void** symbolAddr = (void**)(dlsym(lib, exportName.c_str()));
 
 	if(!symbolAddr || !(*symbolAddr))
 	{

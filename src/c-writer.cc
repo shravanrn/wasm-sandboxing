@@ -1194,9 +1194,12 @@ void CWriter::WriteExports(WriteExportsKind kind) {
     switch (export_->kind) {
       case ExternalKind::Func: {
         const Func* func = module_->GetFunc(export_->var);
-        mangled_name =
-            ExportName(MangleFuncName(export_->name, func->decl.sig.param_types,
-                                      func->decl.sig.result_types));
+        // mangled_name =
+        //     ExportName(MangleFuncName(export_->name, func->decl.sig.param_types,
+        //                               func->decl.sig.result_types));
+        
+        //Remove name mangling
+        mangled_name =ExportName("_E" + export_->name);
         internal_name = func->name;
         if (kind != WriteExportsKind::Initializers) {
           WriteFuncDeclaration(func->decl, Deref(mangled_name));
