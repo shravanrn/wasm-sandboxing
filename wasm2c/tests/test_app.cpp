@@ -3,49 +3,15 @@
 #include <string.h>
 #include <dlfcn.h>
 #include <stdint.h>
-
-void* lib;
-
-void loadLibrary()
-{
-	lib = dlopen("./libwasm_test_dyn_lib.so", RTLD_NOW);
-	if(!lib)
-	{
-		printf("Dlopen failed: %s\n", dlerror());
-		exit(1);
-	}
-
-	using voidvoidPtr = void(*)();
-	voidvoidPtr wasm_init_module = (voidvoidPtr)(uintptr_t)dlsym(lib, "wasm_init_module");
-	if(!wasm_init_module)
-	{
-		printf("Dlsym wasm_init_module failed: %s\n", dlerror());
-		exit(1);
-	}
-	wasm_init_module();
-}
-
-uintptr_t getFunctionPtr(const char* name)
-{
-	void** symbolAddr = (void**)(dlsym(lib, "Z__simpleAddNoPrintTestZ_iii"));
-
-	if(!symbolAddr || !(*symbolAddr))
-	{
-		printf("Dlsym %s failed: %s\n", name, dlerror());
-		exit(1);
-	}
-
-	uintptr_t ret = (uintptr_t) *symbolAddr;
-	return ret;
-}
+#include "../wasm_sandbox.h"
 
 int main(int argc, char** argv) {
 
     printf("Running test\n");
-	loadLibrary();
+    WasmSandbox* sandbox = WasmSandbox::createSandbox("./libwasm_test_dyn_lib.so");
 
 	using ulululPtr = unsigned long(*)(unsigned long, unsigned long);
-	ulululPtr simpleAddNoPrintTest = (ulululPtr) getFunctionPtr("simpleAddNoPrintTest");
+	ulululPtr simpleAddNoPrintTest = (ulululPtr) sandbox->symbolLookup("simpleAddNoPrintTest");
 	auto result = simpleAddNoPrintTest(5, 7);
 
 	if(result != 12)
