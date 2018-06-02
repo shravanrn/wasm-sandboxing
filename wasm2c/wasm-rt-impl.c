@@ -21,6 +21,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
 
 #define PAGE_SIZE 65536
 
@@ -36,6 +38,43 @@ uint32_t wasm_rt_call_stack_depth;
 jmp_buf g_jmp_buf;
 FuncType* g_func_types;
 uint32_t g_func_type_count;
+
+wasm_rt_memory_t *Z_envZ_memory;
+uint32_t *Z_envZ_memoryBaseZ_i;
+
+wasm_rt_table_t *Z_envZ_table;
+uint32_t *Z_envZ_tableBaseZ_i;
+
+void (*Z_envZ_abortZ_vi)(uint32_t);
+
+void init();
+
+void abortCalled(uint32_t param)
+{
+  printf("WASM module called abort : %u\n", param);
+  exit(param);
+}
+
+void wasm_init_module()
+{
+  Z_envZ_abortZ_vi = abortCalled;
+
+  Z_envZ_memoryBaseZ_i = (uint32_t *) malloc(sizeof(uint32_t));
+  *Z_envZ_memoryBaseZ_i = 1024u;
+
+  Z_envZ_memory = (wasm_rt_memory_t *) malloc(sizeof(wasm_rt_memory_t));
+  memset(Z_envZ_memory, 0, sizeof(wasm_rt_memory_t));
+  wasm_rt_allocate_memory(Z_envZ_memory, 1, 32768);
+
+  Z_envZ_tableBaseZ_i = (uint32_t *) malloc(sizeof(uint32_t));
+  *Z_envZ_tableBaseZ_i = 0;
+
+  Z_envZ_table = (wasm_rt_table_t *) malloc(sizeof(wasm_rt_table_t));
+  memset(Z_envZ_table, 0, sizeof(wasm_rt_table_t));
+  wasm_rt_allocate_table(Z_envZ_table, 0, 1024);
+
+  init();
+}
 
 void wasm_rt_trap(wasm_rt_trap_t code) {
   assert(code != WASM_RT_TRAP_NONE);

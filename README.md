@@ -1,3 +1,16 @@
+# Wasm Sandboxing
+
+Modification of the wasm2c tool in the original WABT toolkit to allow sandboxing of native libraries.
+The process for this looks as follows
+Compile native library such as libjpeg to a WASM module with emscripted. Use the wasm2c tool here to get a C module which uses the WASM machine semantics that guarantee safety. Compile the C Code, with the wasm runtime provided here, into a shared library that can be used as a sandboxed library. The wasm runtime provided supports basic memory operations required such as grow memory etc.
+
+Modifications of wasm2c tool
+- Preallocate memory and remove bounds checks for performance and thread safety (todo)
+- Remove unnecessary name mangling (todo)
+- Replace use of global variables in generated code to support multiple sandboxes (todo)
+- Modifications to allow safe support for threads(todo)
+- Safe syscall support (todo)
+
 [![Build Status](https://travis-ci.org/WebAssembly/wabt.svg?branch=master)](https://travis-ci.org/WebAssembly/wabt) [![Windows status](https://ci.appveyor.com/api/projects/status/79hqj5l0qggw645d/branch/master?svg=true)](https://ci.appveyor.com/project/WebAssembly/wabt/branch/master)
 
 # WABT: The WebAssembly Binary Toolkit
