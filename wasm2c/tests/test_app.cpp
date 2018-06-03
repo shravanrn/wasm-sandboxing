@@ -12,7 +12,8 @@ int main(int argc, char** argv) {
 
 	using ulululPtr = unsigned long(*)(unsigned long, unsigned long);
 	ulululPtr simpleAddNoPrintTest = (ulululPtr) sandbox->symbolLookup("simpleAddNoPrintTest");
-	auto result = simpleAddNoPrintTest(5, 7);
+
+    auto result = sandbox->invokeFunction(simpleAddNoPrintTest, 5, 7);
 
 	if(result != 12)
 	{

@@ -23,6 +23,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <setjmp.h>
 
 #define PAGE_SIZE 65536
 
@@ -33,9 +34,9 @@ typedef struct FuncType {
   uint32_t result_count;
 } FuncType;
 
-uint32_t wasm_rt_call_stack_depth;
+_Thread_local uint32_t wasm_rt_call_stack_depth;
 
-jmp_buf g_jmp_buf;
+_Thread_local jmp_buf g_jmp_buf;
 FuncType* g_func_types;
 uint32_t g_func_type_count;
 
@@ -74,6 +75,11 @@ void wasm_init_module()
   wasm_rt_allocate_table(Z_envZ_table, 0, 1024);
 
   init();
+}
+
+int wasm_register_trap_setjmp()
+{
+  return setjmp(g_jmp_buf);
 }
 
 void wasm_rt_trap(wasm_rt_trap_t code) {

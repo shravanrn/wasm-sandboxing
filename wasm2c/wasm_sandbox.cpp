@@ -23,6 +23,14 @@ WasmSandbox* WasmSandbox::createSandbox(const char* path)
 		return nullptr;
 	}
 
+    using intvoidPtr = int(*)();
+    ret->wasm_register_trap_setjmp = (intvoidPtr)(uintptr_t)dlsym(ret->lib, "wasm_register_trap_setjmp");
+    if(!wasm_init_module)
+	{
+		printf("WasmSandbox Dlsym wasm_register_trap_setjmp failed: %s\n", dlerror());
+		return nullptr;
+	}
+
 	wasm_init_module();
     return ret;
 }
