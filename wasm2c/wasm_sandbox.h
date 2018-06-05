@@ -1,6 +1,7 @@
 #include <type_traits>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 
 //https://stackoverflow.com/questions/6512019/can-we-get-the-type-of-a-lambda-argument
 template<typename Ret, typename... Rest>
@@ -24,6 +25,8 @@ class WasmSandbox
 private:
     void* lib;
     int(*wasm_register_trap_setjmp)();
+    uint32_t(*wasm_malloc)(size_t);
+    void(*wasm_free)(uint32_t);
     void* wasm_memory;
 
 public:
@@ -45,6 +48,9 @@ public:
             exit(1);
         }
     }
+
+    void* getUnsandboxedPointer(void* p);
+    void* getSandboxedPointer(void* p);
 
     void* mallocInSandbox(size_t size);
     void freeInSandbox(void* ptr);
