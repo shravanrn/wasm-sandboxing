@@ -159,7 +159,13 @@ extern void wasm_rt_allocate_table(wasm_rt_table_t*,
                                    uint32_t max_elements);
 
 /** Current call stack depth. */
-extern _Thread_local uint32_t wasm_rt_call_stack_depth;
+extern 
+#ifdef __cplusplus
+thread_local
+#else
+_Thread_local 
+#endif
+uint32_t wasm_rt_call_stack_depth;
 
 #ifdef __cplusplus
 }

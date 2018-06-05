@@ -1,8 +1,16 @@
 #include "wasm_sandbox.h"
+#include "wasm-rt-impl.h"
+
 #include <stdio.h>
 #include <dlfcn.h>
 #include <stdint.h>
 #include <string>
+
+#define getSymbol(lhs, type, function) lhs = (type)(uintptr_t)dlsym(ret->lib, #function); \
+if(!lhs) { \
+    printf("WasmSandbox Dlsym " #function " failed: %s\n", dlerror()); \
+    return nullptr; \
+} do {} while(0)
 
 WasmSandbox* WasmSandbox::createSandbox(const char* path)
 {
@@ -16,22 +24,18 @@ WasmSandbox* WasmSandbox::createSandbox(const char* path)
 	}
 
 	using voidvoidPtr = void(*)();
-	voidvoidPtr wasm_init_module = (voidvoidPtr)(uintptr_t)dlsym(ret->lib, "wasm_init_module");
-	if(!wasm_init_module)
-	{
-		printf("WasmSandbox Dlsym wasm_init_module failed: %s\n", dlerror());
-		return nullptr;
-	}
+	voidvoidPtr wasm_init_module;
+    getSymbol(wasm_init_module, voidvoidPtr, wasm_init_module);
 
     using intvoidPtr = int(*)();
-    ret->wasm_register_trap_setjmp = (intvoidPtr)(uintptr_t)dlsym(ret->lib, "wasm_register_trap_setjmp");
-    if(!wasm_init_module)
-	{
-		printf("WasmSandbox Dlsym wasm_register_trap_setjmp failed: %s\n", dlerror());
-		return nullptr;
-	}
+    getSymbol(ret->wasm_register_trap_setjmp, intvoidPtr, wasm_register_trap_setjmp);
 
 	wasm_init_module();
+
+    wasm_rt_memory_t* wasm_memory_st;
+    getSymbol(wasm_memory_st, wasm_rt_memory_t*, Z_envZ_memory);
+
+    ret->wasm_memory = wasm_memory_st->data;
     return ret;
 }
 

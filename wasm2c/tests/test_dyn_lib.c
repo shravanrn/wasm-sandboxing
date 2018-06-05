@@ -9,3 +9,8 @@ const char* strAppend()
 {
     return "Hello World!";
 }
+
+char* simpleEchoTest(char * str)
+{
+	return str;
+}

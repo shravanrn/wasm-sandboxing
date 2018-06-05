@@ -21,8 +21,11 @@ using return_argument = decltype(return_argument_helper(std::declval<T>()));
 
 class WasmSandbox
 {
+private:
     void* lib;
     int(*wasm_register_trap_setjmp)();
+    void* wasm_memory;
+
 public:
     static WasmSandbox* createSandbox(const char* path);
     void* symbolLookup(const char* name);
@@ -42,4 +45,7 @@ public:
             exit(1);
         }
     }
+
+    void* mallocInSandbox(size_t size);
+    void freeInSandbox(void* ptr);
 };

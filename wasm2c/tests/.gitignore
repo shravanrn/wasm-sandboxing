@@ -3,3 +3,5 @@
 /test_app
 /wasm_test_dyn_lib.c
 /wasm_test_dyn_lib.h
+*.wat
+*.js
