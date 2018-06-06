@@ -5,3 +5,4 @@
 /wasm_test_dyn_lib.h
 *.wat
 *.js
+/wasm_test_dyn_lib_rt.c

@@ -46,9 +46,22 @@ uint32_t *Z_envZ_memoryBaseZ_i;
 wasm_rt_table_t *Z_envZ_table;
 uint32_t *Z_envZ_tableBaseZ_i;
 
+uint32_t *Z_envZ_STACKTOPZ_i;
+uint32_t *Z_envZ_STACK_MAXZ_i;
+
+uint32_t *Z_envZ_DYNAMICTOP_PTRZ_i;
+
 void (*Z_envZ_abortZ_vi)(uint32_t);
+uint32_t (*Z_envZ_abortOnCannotGrowMemoryZ_iv)();
+void (*Z_envZ_abortStackOverflowZ_vi)(uint32_t);
+void (*Z_envZ____setErrNoZ_vi)(uint32_t);
+uint32_t (*Z_envZ_enlargeMemoryZ_iv)();
+uint32_t (*Z_envZ_getTotalMemoryZ_iv)(void);
 
 void init();
+void initModuleSpecificConstants();
+extern uint32_t* STATIC_BUMP;
+extern uint32_t (*_E___errno_location)();
 
 void abortCalled(uint32_t param)
 {
@@ -56,9 +69,57 @@ void abortCalled(uint32_t param)
   exit(param);
 }
 
+uint32_t abortOnCannotGrowMemoryCalled()
+{
+  printf("WASM module called abortOnCannotGrowMemory\n");
+  exit(1);
+}
+
+void abortStackOverflowCalled(uint32_t param)
+{
+  printf("WASM module called abortStackOverflow : %u\n", param);
+  exit(param);
+}
+
+void nullFunc_ii(uint32_t param) 
+{ 
+  printf("Invalid function pointer called with signature 'ii': %u", param);
+  exit(param);
+}
+
+void nullFunc_iiii(uint32_t param) 
+{ 
+  printf("Invalid function pointer called with signature 'iiii': %u", param);
+  exit(param);
+}
+
+void setErrNo(uint32_t value)
+{
+  uint32_t loc = _E___errno_location();
+  Z_envZ_memory->data[loc * 4] = value;
+}
+
+uint32_t enlargeMemory() 
+{
+  abortOnCannotGrowMemoryCalled();
+}
+
+uint32_t getTotalMemory()
+{
+  //4GB
+  return 0xFFFFFFFF;
+}
+
+#define ALIGN4(val) ((val) + 3) & (-4)
+
 void wasm_init_module()
 {
   Z_envZ_abortZ_vi = abortCalled;
+  Z_envZ_abortOnCannotGrowMemoryZ_iv = abortOnCannotGrowMemoryCalled;
+  Z_envZ_abortStackOverflowZ_vi = abortStackOverflowCalled;
+  Z_envZ____setErrNoZ_vi = setErrNo;
+  Z_envZ_enlargeMemoryZ_iv = enlargeMemory;
+  Z_envZ_getTotalMemoryZ_iv = getTotalMemory;
 
   Z_envZ_memoryBaseZ_i = (uint32_t *) malloc(sizeof(uint32_t));
   *Z_envZ_memoryBaseZ_i = 1024u;
@@ -74,6 +135,17 @@ void wasm_init_module()
   memset(Z_envZ_table, 0, sizeof(wasm_rt_table_t));
   wasm_rt_allocate_table(Z_envZ_table, 0, 1024);
 
+  initModuleSpecificConstants();
+
+  Z_envZ_STACKTOPZ_i = (uint32_t*) malloc(sizeof(uint32_t));
+  Z_envZ_STACK_MAXZ_i = (uint32_t*) malloc(sizeof(uint32_t));
+  Z_envZ_DYNAMICTOP_PTRZ_i = (uint32_t*) malloc(sizeof(uint32_t));
+
+  uint32_t staticTop = *Z_envZ_memoryBaseZ_i + *STATIC_BUMP;
+  *Z_envZ_DYNAMICTOP_PTRZ_i = staticTop;
+  *Z_envZ_STACKTOPZ_i = ALIGN4(staticTop + 1);
+  uint32_t totalStack = 5242880;
+  *Z_envZ_STACK_MAXZ_i = *Z_envZ_memoryBaseZ_i + totalStack;
   init();
 }
 

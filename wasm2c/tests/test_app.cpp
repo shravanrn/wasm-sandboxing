@@ -10,6 +10,12 @@ int main(int argc, char** argv) {
     printf("Running test\n");
     WasmSandbox* sandbox = WasmSandbox::createSandbox("./libwasm_test_dyn_lib.so");
 
+	if(!sandbox)
+	{
+		printf("Sandbox creation failed\n");
+		exit(1);
+	}
+
 	using ulululPtr = unsigned long(*)(unsigned long, unsigned long);
 	ulululPtr simpleAddNoPrintTest = (ulululPtr) sandbox->symbolLookup("simpleAddNoPrintTest");
 
