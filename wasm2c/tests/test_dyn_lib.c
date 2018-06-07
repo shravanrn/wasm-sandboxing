@@ -1,13 +1,14 @@
 #include "test_dyn_lib.h"
+#include <string.h>
 
 unsigned long simpleAddNoPrintTest(unsigned long a, unsigned long b)
 {
 	return a + b;
 }
 
-const char* strAppend()
+size_t simpleStrLenTest(const char* str)
 {
-    return "Hello World!";
+	return strlen(str);
 }
 
 char* simpleEchoTest(char * str)

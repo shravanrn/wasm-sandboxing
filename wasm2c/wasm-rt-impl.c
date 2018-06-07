@@ -106,8 +106,8 @@ uint32_t enlargeMemory()
 
 uint32_t getTotalMemory()
 {
-  //4GB
-  return 0xFFFFFFFF;
+  //2GB - 1 page
+  return (uint32_t)(((uint64_t)0x10000000) - PAGE_SIZE);
 }
 
 #define ALIGN4(val) ((val) + 3) & (-4)
@@ -126,7 +126,8 @@ void wasm_init_module()
 
   Z_envZ_memory = (wasm_rt_memory_t *) malloc(sizeof(wasm_rt_memory_t));
   memset(Z_envZ_memory, 0, sizeof(wasm_rt_memory_t));
-  wasm_rt_allocate_memory(Z_envZ_memory, 1, 32768);
+  uint32_t pagesToAllocate = getTotalMemory() / PAGE_SIZE;
+  wasm_rt_allocate_memory(Z_envZ_memory, pagesToAllocate, pagesToAllocate);
 
   Z_envZ_tableBaseZ_i = (uint32_t *) malloc(sizeof(uint32_t));
   *Z_envZ_tableBaseZ_i = 0;
@@ -149,9 +150,9 @@ void wasm_init_module()
   init();
 }
 
-int wasm_register_trap_setjmp()
+jmp_buf* wasm_get_setjmp_buff()
 {
-  return setjmp(g_jmp_buf);
+  return &g_jmp_buf;
 }
 
 void wasm_rt_trap(wasm_rt_trap_t code) {
@@ -180,6 +181,11 @@ uint32_t wasm_rt_register_func_type(uint32_t param_count,
   func_type.params = malloc(param_count * sizeof(wasm_rt_type_t));
   func_type.result_count = result_count;
   func_type.results = malloc(result_count * sizeof(wasm_rt_type_t));
+  if(!func_type.params || !func_type.results)
+  {
+    printf("Failed to allocate register_func_type memory!\n");
+    exit(1);
+  }
 
   va_list args;
   va_start(args, result_count);
@@ -201,6 +207,11 @@ uint32_t wasm_rt_register_func_type(uint32_t param_count,
 
   uint32_t idx = g_func_type_count++;
   g_func_types = realloc(g_func_types, g_func_type_count * sizeof(FuncType));
+  if(!g_func_types)
+  {
+    printf("Failed to allocate wasm function types table!\n");
+    exit(1);
+  }
   g_func_types[idx] = func_type;
   return idx + 1;
 }
@@ -212,6 +223,11 @@ void wasm_rt_allocate_memory(wasm_rt_memory_t* memory,
   memory->max_pages = max_pages;
   memory->size = initial_pages * PAGE_SIZE;
   memory->data = calloc(memory->size, 1);
+  if(!memory->data)
+  {
+    printf("Failed to allocate sandbox memory!\n");
+    exit(1);
+  }
 }
 
 uint32_t wasm_rt_grow_memory(wasm_rt_memory_t* memory, uint32_t delta) {
@@ -221,6 +237,11 @@ uint32_t wasm_rt_grow_memory(wasm_rt_memory_t* memory, uint32_t delta) {
     return (uint32_t)-1;
   }
   memory->data = realloc(memory->data, new_pages);
+  if(!memory->data)
+  {
+    printf("Failed to allocate sandbox memory!\n");
+    exit(1);
+  }
   memory->pages = new_pages;
   memory->size = new_pages * PAGE_SIZE;
   return old_pages;
@@ -232,4 +253,9 @@ void wasm_rt_allocate_table(wasm_rt_table_t* table,
   table->size = elements;
   table->max_size = max_elements;
   table->data = calloc(table->size, sizeof(wasm_rt_elem_t));
+  if(!table->data)
+  {
+    printf("Failed to allocate sandbox Wasm table!\n");
+    exit(1);
+  }
 }

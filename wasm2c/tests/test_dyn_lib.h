@@ -1,3 +1,4 @@
+#include <stdlib.h>
 unsigned long simpleAddNoPrintTest(unsigned long a, unsigned long b);
-const char* strAppend();
+size_t simpleStrLenTest(const char* str);
 char* simpleEchoTest(char * str);
