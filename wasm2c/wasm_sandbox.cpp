@@ -27,16 +27,19 @@ WasmSandbox* WasmSandbox::createSandbox(const char* path)
 	voidvoidPtr wasm_init_module;
 	getSymbol(wasm_init_module, voidvoidPtr, wasm_init_module);
 
+	wasm_init_module();
+
 	using jmpbufpvoidPtr = jmp_buf*(*)();
 	getSymbol(ret->wasm_get_setjmp_buff, jmpbufpvoidPtr, wasm_get_setjmp_buff);
-
-	wasm_init_module();
 
 	using mallocType = uint32_t(*)(size_t);
 	ret->wasm_malloc = (mallocType) ret->symbolLookup("malloc");
 
 	using freeType = void(*)(uint32_t);
 	ret->wasm_free = (freeType) ret->symbolLookup("free");
+
+	using registerType = uint32_t (*)(uint32_t, uint32_t, ...);
+	getSymbol(ret->wasm_rt_register_func_type, registerType, wasm_rt_register_func_type);
 
 	wasm_rt_memory_t** wasm_memory_st;
 	getSymbol(wasm_memory_st, wasm_rt_memory_t**, Z_envZ_memory);

@@ -4,6 +4,7 @@
 #include <dlfcn.h>
 #include <stdint.h>
 #include "../wasm_sandbox.h"
+#include "test_dyn_lib.h"
 
 int invokeSimpleAddTest(WasmSandbox* sandbox, int a, int b)
 {
@@ -26,6 +27,20 @@ size_t invokeSimpleStrLenTestWithHeapString(WasmSandbox* sandbox, const char* st
 	sandbox->freeInSandbox(strInSandbox);
 	return result;
 }
+
+int invokeSimpleCallbackTest_callback(unsigned a, char* b)
+{
+	return a + strlen(b);
+}
+
+// int invokeSimpleCallbackTest(WasmSandbox* sandbox, void* simpleCallbackTestPtr, unsigned a, char* b, uintptr_t callback)
+// {
+// 	using fnType = int (*)(unsigned, const char*, CallbackType);
+// 	fnType fn = (fnType) sandbox->symbolLookup("simpleCallbackTest");
+
+// 	auto result = sandbox->invokeFunction(fn, a, b, callback);
+// 	return result;
+// }
 
 int main(int argc, char** argv) {
 
@@ -55,6 +70,15 @@ int main(int argc, char** argv) {
 		printf("Test 3: Failed\n");
 		exit(1);
 	}
+
+	// sandbox->registerCallback(invokeSimpleCallbackTest_callback);
+
+
+	// if(invokeSimpleCallbackTest(sandbox, 4, "Hello", testParams->registeredCallback) != 10)
+	// {
+	// 	printf("Test 4: Failed\n");
+	// 	exit(1);
+	// }
 
 	printf("Tests Completed\n");
 

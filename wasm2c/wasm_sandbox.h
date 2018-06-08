@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <setjmp.h>
+#include "wasm-rt-impl.h"
 
 //https://stackoverflow.com/questions/6512019/can-we-get-the-type-of-a-lambda-argument
 template<typename Ret, typename... Rest>
@@ -28,6 +29,7 @@ private:
 	jmp_buf* (*wasm_get_setjmp_buff)();
 	uint32_t(*wasm_malloc)(size_t);
 	void(*wasm_free)(uint32_t);
+	uint32_t (*wasm_rt_register_func_type)(uint32_t, uint32_t, ...);
 	void* wasm_memory;
 	size_t wasm_memory_size;
 
@@ -42,6 +44,12 @@ private:
 	{
 		auto ret = (T*) getSandboxedPointer(arg);
 		return ret;
+	}
+
+	template<typename T>
+	wasm_rt_type_t getWasmType()
+	{
+		return WASM_RT_I32;
 	}
 
 public:
@@ -64,6 +72,16 @@ public:
 			printf("Wasm function call failed with trap code: %d\n", trapCode);
 			exit(1);
 		}
+	}
+
+	template<typename TRet, typename... TArgs>
+	void registerCallback(TRet(*callback)(TArgs...))
+	{
+		wasm_rt_elem_t* callbackObj = (wasm_rt_elem_t*) malloc(sizeof(wasm_rt_elem_t));
+		uint32_t paramCount = sizeof...(TArgs);
+		uint32_t returnCount = 1;
+		callbackObj->func_type = wasm_rt_register_func_type(paramCount, returnCount, getWasmType<TArgs>()..., getWasmType<TRet>());
+		callbackObj->func = (wasm_rt_anyfunc_t)(void*)callback;
 	}
 
 	void* getUnsandboxedPointer(void* p);

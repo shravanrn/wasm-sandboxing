@@ -24,8 +24,24 @@
 #include <stdio.h>
 #include <string.h>
 #include <setjmp.h>
+#include <mutex>
+#include <map>
 
 #define PAGE_SIZE 65536
+
+std::map<uint32_t, std::mutex> lockMap;
+
+void lockImpl(uint32_t lockId)
+{
+  lockMap[lockId].lock();
+}
+
+void unlockImpl(uint32_t lockId)
+{
+  lockMap[lockId].unlock();
+}
+
+extern "C" {
 
 typedef struct FuncType {
   wasm_rt_type_t* params;
@@ -34,9 +50,14 @@ typedef struct FuncType {
   uint32_t result_count;
 } FuncType;
 
+#ifdef __cplusplus
+thread_local uint32_t wasm_rt_call_stack_depth;
+thread_local jmp_buf g_jmp_buf;
+#else
 _Thread_local uint32_t wasm_rt_call_stack_depth;
-
 _Thread_local jmp_buf g_jmp_buf;
+#endif
+
 FuncType* g_func_types;
 uint32_t g_func_type_count;
 
@@ -51,14 +72,26 @@ uint32_t *Z_envZ_STACK_MAXZ_i;
 
 uint32_t *Z_envZ_DYNAMICTOP_PTRZ_i;
 
+uint32_t *Z_envZ_tempDoublePtrZ_i;
+
+double *Z_globalZ_NaNZ_d;
+double *Z_globalZ_InfinityZ_d;
+uint32_t *Z_envZ_ABORTZ_i;
+
 void (*Z_envZ_abortZ_vi)(uint32_t);
 uint32_t (*Z_envZ_abortOnCannotGrowMemoryZ_iv)();
 void (*Z_envZ_abortStackOverflowZ_vi)(uint32_t);
 void (*Z_envZ____setErrNoZ_vi)(uint32_t);
 uint32_t (*Z_envZ_enlargeMemoryZ_iv)();
 uint32_t (*Z_envZ_getTotalMemoryZ_iv)(void);
+void (*Z_envZ____lockZ_vi)(uint32_t);
+void (*Z_envZ____unlockZ_vi)(uint32_t);
+uint32_t (*Z_envZ__emscripten_memcpy_bigZ_iiii)(uint32_t, uint32_t, uint32_t);
+void (*Z_envZ_nullFunc_iiZ_vi)(uint32_t);
+void (*Z_envZ_nullFunc_iiiiZ_vi)(uint32_t);
 
 void init();
+void initSyscalls();
 void initModuleSpecificConstants();
 extern uint32_t* STATIC_BUMP;
 extern uint32_t (*_E___errno_location)();
@@ -96,7 +129,7 @@ void nullFunc_iiii(uint32_t param)
 void setErrNo(uint32_t value)
 {
   uint32_t loc = _E___errno_location();
-  Z_envZ_memory->data[loc * 4] = value;
+  Z_envZ_memory->data[loc] = value;
 }
 
 uint32_t enlargeMemory() 
@@ -110,6 +143,11 @@ uint32_t getTotalMemory()
   return (uint32_t)(((uint64_t)0x10000000) - PAGE_SIZE);
 }
 
+uint32_t memcpy_big(uint32_t dest, uint32_t src, uint32_t num) {
+  memcpy(&(Z_envZ_memory->data[dest]), &(Z_envZ_memory->data[src]), num);
+  return dest;
+} 
+
 #define ALIGN4(val) ((val) + 3) & (-4)
 
 void wasm_init_module()
@@ -120,6 +158,11 @@ void wasm_init_module()
   Z_envZ____setErrNoZ_vi = setErrNo;
   Z_envZ_enlargeMemoryZ_iv = enlargeMemory;
   Z_envZ_getTotalMemoryZ_iv = getTotalMemory;
+  Z_envZ____lockZ_vi = lockImpl;
+  Z_envZ____unlockZ_vi = unlockImpl;
+  Z_envZ__emscripten_memcpy_bigZ_iiii = memcpy_big;
+  Z_envZ_nullFunc_iiZ_vi = nullFunc_ii;
+  Z_envZ_nullFunc_iiiiZ_vi = nullFunc_iiii;
 
   Z_envZ_memoryBaseZ_i = (uint32_t *) malloc(sizeof(uint32_t));
   *Z_envZ_memoryBaseZ_i = 1024u;
@@ -141,12 +184,28 @@ void wasm_init_module()
   Z_envZ_STACKTOPZ_i = (uint32_t*) malloc(sizeof(uint32_t));
   Z_envZ_STACK_MAXZ_i = (uint32_t*) malloc(sizeof(uint32_t));
   Z_envZ_DYNAMICTOP_PTRZ_i = (uint32_t*) malloc(sizeof(uint32_t));
+  Z_envZ_tempDoublePtrZ_i = (uint32_t*) malloc(sizeof(uint32_t));
 
   uint32_t staticTop = *Z_envZ_memoryBaseZ_i + *STATIC_BUMP;
+  *Z_envZ_tempDoublePtrZ_i = staticTop;
+  staticTop += 16;
+
   *Z_envZ_DYNAMICTOP_PTRZ_i = staticTop;
   *Z_envZ_STACKTOPZ_i = ALIGN4(staticTop + 1);
   uint32_t totalStack = 5242880;
   *Z_envZ_STACK_MAXZ_i = *Z_envZ_memoryBaseZ_i + totalStack;
+
+  Z_globalZ_NaNZ_d = (double*) malloc(sizeof(double));
+  Z_globalZ_InfinityZ_d = (double*) malloc(sizeof(double));
+
+  *Z_globalZ_NaNZ_d = strtod("NaN", NULL);
+  *Z_globalZ_InfinityZ_d = strtod("Inf", NULL);
+
+  Z_envZ_ABORTZ_i = (uint32_t*) malloc(sizeof(uint32_t));
+  *Z_envZ_ABORTZ_i = 0;
+
+  initSyscalls();
+
   init();
 }
 
@@ -178,9 +237,9 @@ uint32_t wasm_rt_register_func_type(uint32_t param_count,
                                     ...) {
   FuncType func_type;
   func_type.param_count = param_count;
-  func_type.params = malloc(param_count * sizeof(wasm_rt_type_t));
+  func_type.params = (wasm_rt_type_t*) malloc(param_count * sizeof(wasm_rt_type_t));
   func_type.result_count = result_count;
-  func_type.results = malloc(result_count * sizeof(wasm_rt_type_t));
+  func_type.results = (wasm_rt_type_t*) malloc(result_count * sizeof(wasm_rt_type_t));
   if(!func_type.params || !func_type.results)
   {
     printf("Failed to allocate register_func_type memory!\n");
@@ -192,9 +251,15 @@ uint32_t wasm_rt_register_func_type(uint32_t param_count,
 
   uint32_t i;
   for (i = 0; i < param_count; ++i)
-    func_type.params[i] = va_arg(args, wasm_rt_type_t);
+  {
+    // func_type.params[i] = va_arg(args, wasm_rt_type_t);
+    func_type.params[i] = (wasm_rt_type_t) va_arg(args, int);
+  }
   for (i = 0; i < result_count; ++i)
-    func_type.results[i] = va_arg(args, wasm_rt_type_t);
+  {
+    // func_type.results[i] = va_arg(args, wasm_rt_type_t);
+    func_type.results[i] = (wasm_rt_type_t) va_arg(args, int);
+  }
   va_end(args);
 
   for (i = 0; i < g_func_type_count; ++i) {
@@ -206,7 +271,7 @@ uint32_t wasm_rt_register_func_type(uint32_t param_count,
   }
 
   uint32_t idx = g_func_type_count++;
-  g_func_types = realloc(g_func_types, g_func_type_count * sizeof(FuncType));
+  g_func_types = (FuncType*) realloc(g_func_types, g_func_type_count * sizeof(FuncType));
   if(!g_func_types)
   {
     printf("Failed to allocate wasm function types table!\n");
@@ -222,7 +287,7 @@ void wasm_rt_allocate_memory(wasm_rt_memory_t* memory,
   memory->pages = initial_pages;
   memory->max_pages = max_pages;
   memory->size = initial_pages * PAGE_SIZE;
-  memory->data = calloc(memory->size, 1);
+  memory->data = (uint8_t*) calloc(memory->size, 1);
   if(!memory->data)
   {
     printf("Failed to allocate sandbox memory!\n");
@@ -236,7 +301,7 @@ uint32_t wasm_rt_grow_memory(wasm_rt_memory_t* memory, uint32_t delta) {
   if (new_pages < old_pages || new_pages > memory->max_pages) {
     return (uint32_t)-1;
   }
-  memory->data = realloc(memory->data, new_pages);
+  memory->data = (uint8_t*) realloc(memory->data, new_pages);
   if(!memory->data)
   {
     printf("Failed to allocate sandbox memory!\n");
@@ -252,10 +317,15 @@ void wasm_rt_allocate_table(wasm_rt_table_t* table,
                             uint32_t max_elements) {
   table->size = elements;
   table->max_size = max_elements;
-  table->data = calloc(table->size, sizeof(wasm_rt_elem_t));
+  table->data = (wasm_rt_elem_t*) calloc(table->size, sizeof(wasm_rt_elem_t));
   if(!table->data)
   {
     printf("Failed to allocate sandbox Wasm table!\n");
     exit(1);
   }
 }
+
+
+
+
+}//extern C

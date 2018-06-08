@@ -1,4 +1,8 @@
 STATIC_BUMP=$(cat $1 | grep -P -o "(?<=var STATIC_BUMP=)\d+")
+if [ -z "$STATIC_BUMP" ]; then
+    STATIC_BUMP=$(cat $1 | grep -P -o "(?<=var STATIC_BUMP = )\d+")
+fi
+echo "extern \"C\"{"
 echo "#include<stdint.h>"
 echo "#include<stdlib.h>"
 echo "uint32_t* STATIC_BUMP;"
@@ -7,4 +11,5 @@ echo "void initModuleSpecificConstants()"
 echo "{"
 echo "    STATIC_BUMP = (uint32_t *) malloc(sizeof(uint32_t));"
 echo "    *STATIC_BUMP = $STATIC_BUMP;"
+echo "}"
 echo "}"

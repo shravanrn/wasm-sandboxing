@@ -6,3 +6,5 @@
 *.wat
 *.js
 /wasm_test_dyn_lib_rt.c
+*.wast
+/wasm_test_dyn_lib_rt.cpp
