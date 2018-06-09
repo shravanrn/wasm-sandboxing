@@ -17,7 +17,7 @@
 #ifndef WASM_RT_IMPL_H_
 #define WASM_RT_IMPL_H_
 
-// #include <setjmp.h>
+#include <setjmp.h>
 
 #include "wasm-rt.h"
 
@@ -25,25 +25,7 @@
 extern "C" {
 #endif
 
-/** A setjmp buffer used for handling traps. */
-// extern _Thread_local jmp_buf g_jmp_buf;
-
-/** Convenience macro to use before calling a wasm function. On first execution
- * it will return `WASM_RT_TRAP_NONE` (i.e. 0). If the function traps, it will
- * jump back and return the trap that occurred.
- *
- * ```
- *   wasm_rt_trap_t code = wasm_rt_impl_try();
- *   if (code != 0) {
- *     printf("A trap occurred with code: %d\n", code);
- *     ...
- *   }
- *
- *   // Call the potentially-trapping function.
- *   my_wasm_func();
- * ```
- */
-// #define wasm_rt_impl_try() setjmp(g_jmp_buf)
+jmp_buf* wasm_get_setjmp_buff();
 
 #ifdef __cplusplus
 }

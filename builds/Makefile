@@ -31,7 +31,7 @@ build64: wabt_bin wasm_sandbox_lib
 	../../bin/wasm2wat --inline-exports --inline-imports -f test_dyn_lib_my.wasm -o test_dyn_lib_my.wat
 	# There is a tool failure if we try setting the total memory to 4GB (causing a u32 overflow) and 
 	# a runtime failure of signed vs unsigned if we set this to more that 2GB. So we set it to (2GB - 64KB)
-	bash -c 'emcc test_dyn_lib.c $(EMSCRIPTEN_CFLAGS) -s WASM=1 -s TOTAL_MEMORY=2147418112 -s ALLOW_MEMORY_GROWTH=0 -s "EXPORTED_FUNCTIONS=[$$(../../builds/getWastFunctions ./test_dyn_lib_my.wat), '_malloc', '_free']" -o wasm_test_dyn_lib.js'
+	bash -c 'emcc test_dyn_lib.c $(EMSCRIPTEN_CFLAGS) -s WASM=1 -s TOTAL_MEMORY=2147418112 -s ALLOW_MEMORY_GROWTH=0 -s LEGALIZE_JS_FFI=0 -s "EXPORTED_FUNCTIONS=[$$(../../builds/getWastFunctions ./test_dyn_lib_my.wat), '_malloc', '_free']" -o wasm_test_dyn_lib.js'
 	../../bin/wasm2wat --inline-exports --inline-imports -f wasm_test_dyn_lib.wasm -o wasm_test_dyn_lib.wat
 	../../bin/wasm2c wasm_test_dyn_lib.wasm -o wasm_test_dyn_lib.c
 	../../builds/generateModuleSpecificConstants wasm_test_dyn_lib.js > wasm_test_dyn_lib_rt.cpp

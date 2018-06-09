@@ -26,3 +26,20 @@ unsigned long getVal()
 {
 	return sizeof(void*);
 }
+
+uint32_t test32(uint32_t a)
+{
+	return a;
+}
+uint64_t test64(uint64_t a)
+{
+	return a >> 32;
+}
+float testFloat(float a)
+{
+	return a;
+}
+double testDouble(double a)
+{
+	return a;
+}

@@ -91,73 +91,9 @@ typedef struct {
   uint32_t size;
 } wasm_rt_table_t;
 
-/** Stop execution immediately and jump back to the call to `wasm_rt_try`.
- *  The result of `wasm_rt_try` will be the provided trap reason.
- *
- *  This is typically called by the generated code, and not the embedder. */
-extern void wasm_rt_trap(wasm_rt_trap_t) __attribute__((noreturn));
-
-/** Register a function type with the given signature. The returned function
- * index is guaranteed to be the same for all calls with the same signature.
- * The following varargs must all be of type `wasm_rt_type_t`, first the
- * params` and then the `results`.
- *
- *  ```
- *    // Register (func (param i32 f32) (result i64)).
- *    wasm_rt_register_func_type(2, 1, WASM_RT_I32, WASM_RT_F32, WASM_RT_I64);
- *    => returns 1
- *
- *    // Register (func (result i64)).
- *    wasm_rt_register_func_type(0, 1, WASM_RT_I32);
- *    => returns 2
- *
- *    // Register (func (param i32 f32) (result i64)) again.
- *    wasm_rt_register_func_type(2, 1, WASM_RT_I32, WASM_RT_F32, WASM_RT_I64);
- *    => returns 1
- *  ``` */
-extern uint32_t wasm_rt_register_func_type(uint32_t params,
-                                           uint32_t results,
-                                           ...);
-
-/** Initialize a Memory object with an initial page size of `initial_pages` and
- * a maximum page size of `max_pages`.
- *
- *  ```
- *    wasm_rt_memory_t my_memory;
- *    // 1 initial page (65536 bytes), and a maximum of 2 pages.
- *    wasm_rt_allocate_memory(&my_memory, 1, 2);
- *  ``` */
-extern void wasm_rt_allocate_memory(wasm_rt_memory_t*,
-                                    uint32_t initial_pages,
-                                    uint32_t max_pages);
-
-/** Grow a Memory object by `pages`, and return the previous page count. If
- * this new page count is greater than the maximum page count, the grow fails
- * and 0xffffffffu (UINT32_MAX) is returned instead.
- *
- *  ```
- *    wasm_rt_memory_t my_memory;
- *    ...
- *    // Grow memory by 10 pages.
- *    uint32_t old_page_size = wasm_rt_grow_memory(&my_memory, 10);
- *    if (old_page_size == UINT32_MAX) {
- *      // Failed to grow memory.
- *    }
- *  ``` */
-extern uint32_t wasm_rt_grow_memory(wasm_rt_memory_t*, uint32_t pages);
-
-/** Initialize a Table object with an element count of `elements` and a maximum
- * page size of `max_elements`.
- *
- *  ```
- *    wasm_rt_table_t my_table;
- *    // 5 elemnets and a maximum of 10 elements.
- *    wasm_rt_allocate_table(&my_table, 5, 10);
- *  ``` */
-extern void wasm_rt_allocate_table(wasm_rt_table_t*,
-                                   uint32_t elements,
-                                   uint32_t max_elements);
-
+void wasm_init_module();
+void wasm_rt_trap(wasm_rt_trap_t) __attribute__((noreturn));
+uint32_t wasm_rt_register_func_type(uint32_t param_count, uint32_t result_count, ...);
 /** Current call stack depth. */
 extern 
 #ifdef __cplusplus

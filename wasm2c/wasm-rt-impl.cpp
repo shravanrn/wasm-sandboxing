@@ -26,22 +26,9 @@
 #include <setjmp.h>
 #include <mutex>
 #include <map>
+#include <vector>
 
 #define PAGE_SIZE 65536
-
-std::map<uint32_t, std::mutex> lockMap;
-
-void lockImpl(uint32_t lockId)
-{
-  lockMap[lockId].lock();
-}
-
-void unlockImpl(uint32_t lockId)
-{
-  lockMap[lockId].unlock();
-}
-
-extern "C" {
 
 typedef struct FuncType {
   wasm_rt_type_t* params;
@@ -78,6 +65,7 @@ double *Z_globalZ_NaNZ_d;
 double *Z_globalZ_InfinityZ_d;
 uint32_t *Z_envZ_ABORTZ_i;
 
+void (*Z_envZ__abortZ_vv)(void);
 void (*Z_envZ_abortZ_vi)(uint32_t);
 uint32_t (*Z_envZ_abortOnCannotGrowMemoryZ_iv)();
 void (*Z_envZ_abortStackOverflowZ_vi)(uint32_t);
@@ -90,11 +78,19 @@ uint32_t (*Z_envZ__emscripten_memcpy_bigZ_iiii)(uint32_t, uint32_t, uint32_t);
 void (*Z_envZ_nullFunc_iiZ_vi)(uint32_t);
 void (*Z_envZ_nullFunc_iiiiZ_vi)(uint32_t);
 
+extern "C" {
 void init();
+}
 void initSyscalls();
 void initModuleSpecificConstants();
 extern uint32_t* STATIC_BUMP;
 extern uint32_t (*_E___errno_location)();
+
+void abortCalledVoid()
+{
+  printf("WASM module called abort\n");
+  exit(1);
+}
 
 void abortCalled(uint32_t param)
 {
@@ -148,10 +144,26 @@ uint32_t memcpy_big(uint32_t dest, uint32_t src, uint32_t num) {
   return dest;
 } 
 
+std::map<uint32_t, std::mutex> lockMap;
+
+void lockImpl(uint32_t lockId)
+{
+  lockMap[lockId].lock();
+}
+
+void unlockImpl(uint32_t lockId)
+{
+  lockMap[lockId].unlock();
+}
+
 #define ALIGN4(val) ((val) + 3) & (-4)
+
+void wasm_rt_allocate_memory(wasm_rt_memory_t* memory, uint32_t initial_pages, uint32_t max_pages);
+void wasm_rt_allocate_table(wasm_rt_table_t* table, uint32_t elements, uint32_t max_elements);
 
 void wasm_init_module()
 {
+  Z_envZ__abortZ_vv = abortCalledVoid;
   Z_envZ_abortZ_vi = abortCalled;
   Z_envZ_abortOnCannotGrowMemoryZ_iv = abortOnCannotGrowMemoryCalled;
   Z_envZ_abortStackOverflowZ_vi = abortStackOverflowCalled;
@@ -295,23 +307,6 @@ void wasm_rt_allocate_memory(wasm_rt_memory_t* memory,
   }
 }
 
-uint32_t wasm_rt_grow_memory(wasm_rt_memory_t* memory, uint32_t delta) {
-  uint32_t old_pages = memory->pages;
-  uint32_t new_pages = memory->pages + delta;
-  if (new_pages < old_pages || new_pages > memory->max_pages) {
-    return (uint32_t)-1;
-  }
-  memory->data = (uint8_t*) realloc(memory->data, new_pages);
-  if(!memory->data)
-  {
-    printf("Failed to allocate sandbox memory!\n");
-    exit(1);
-  }
-  memory->pages = new_pages;
-  memory->size = new_pages * PAGE_SIZE;
-  return old_pages;
-}
-
 void wasm_rt_allocate_table(wasm_rt_table_t* table,
                             uint32_t elements,
                             uint32_t max_elements) {
@@ -324,8 +319,3 @@ void wasm_rt_allocate_table(wasm_rt_table_t* table,
     exit(1);
   }
 }
-
-
-
-
-}//extern C
