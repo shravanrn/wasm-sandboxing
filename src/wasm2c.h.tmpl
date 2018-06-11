@@ -27,6 +27,16 @@ typedef int64_t s64;
 typedef float f32;
 typedef double f64;
 
+extern
+#ifdef __cplusplus
+thread_local
+#else
+_Thread_local 
+#endif
+u32 CurrentIndirectCall;
+
+u32 wasm_get_current_indirect_call_num();
+
 extern void WASM_RT_ADD_PREFIX(init)(void);
 %%bottom
 #ifdef __cplusplus

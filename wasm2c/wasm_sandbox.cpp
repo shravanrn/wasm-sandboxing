@@ -1,5 +1,5 @@
-#include "wasm_sandbox.h"
 #include "wasm-rt-impl.h"
+#include "wasm_sandbox.h"
 
 #include <stdio.h>
 #include <dlfcn.h>
@@ -11,6 +11,8 @@ if(!lhs) { \
 	printf("WasmSandbox Dlsym " #function " failed: %s\n", dlerror()); \
 	return nullptr; \
 } do {} while(0)
+
+thread_local WasmSandbox* WasmSandboxImpl::CurrThreadSandbox = 0;
 
 WasmSandbox* WasmSandbox::createSandbox(const char* path)
 {
@@ -38,12 +40,21 @@ WasmSandbox* WasmSandbox::createSandbox(const char* path)
 	using freeType = void(*)(uint32_t);
 	ret->wasm_free = (freeType) ret->symbolLookup("free");
 
-	using registerType = uint32_t (*)(uint32_t, uint32_t, ...);
-	getSymbol(ret->wasm_rt_register_func_type, registerType, wasm_rt_register_func_type);
+	using registerFuncTypeType = uint32_t (*)(std::vector<wasm_rt_type_t> *, std::vector<wasm_rt_type_t> *);
+	getSymbol(ret->wasm_rt_register_func_type_with_lists, registerFuncTypeType, wasm_rt_register_func_type_with_lists);
+
+	using registerFuncType = uint32_t(*)(void(*)(), uint32_t);
+	getSymbol(ret->wasm_rt_register_func, registerFuncType, wasm_rt_register_func);
+
+	using unregisterFuncType = void (*)(uint32_t);
+	getSymbol(ret->wasm_ret_unregister_func, unregisterFuncType, wasm_ret_unregister_func);
+
+	using getCurrentIndirectType = uint32_t (*)();
+	getSymbol(ret->wasm_get_current_indirect_call_num, getCurrentIndirectType, wasm_get_current_indirect_call_num);
 
 	wasm_rt_memory_t** wasm_memory_st;
 	getSymbol(wasm_memory_st, wasm_rt_memory_t**, Z_envZ_memory);
-
+	
 	ret->wasm_memory = (*wasm_memory_st)->data;
 	ret->wasm_memory_size = (*wasm_memory_st)->size;
 	return ret;
@@ -62,6 +73,34 @@ void* WasmSandbox::symbolLookup(const char* name)
 	}
 
 	return *symbolAddr;
+}
+
+WasmSandboxCallback WasmSandbox::registerCallbackImpl(void(*callback)(), void(*callbackStub)(), std::vector<wasm_rt_type_t> params, std::vector<wasm_rt_type_t> results)
+{
+	uint32_t func_type = wasm_rt_register_func_type_with_lists(&params, &results);
+	wasm_rt_anyfunc_t func = (wasm_rt_anyfunc_t)(void*)callbackStub;
+	uint32_t callbackSlot = wasm_rt_register_func(func, func_type);
+
+	{
+		std::lock_guard<std::mutex> lockGuard (registeredCallbackLock);
+		registerCallbackMap[callbackSlot] = (void*) callback;
+	}
+
+	WasmSandboxCallback ret;
+	ret.callbackSlot = callbackSlot;
+	ret.originalCallback = (uintptr_t) callback;
+	ret.callbackStub = (uintptr_t) callbackStub;
+	return ret;
+}
+
+void WasmSandbox::unregisterCallback(WasmSandboxCallback callback)
+{
+	{
+		std::lock_guard<std::mutex> lockGuard (registeredCallbackLock);
+		registerCallbackMap.erase(callback.callbackSlot);
+	}
+
+	wasm_ret_unregister_func(callback.callbackSlot);
 }
 
 void* WasmSandbox::getUnsandboxedPointer(void* p)

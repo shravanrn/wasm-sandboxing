@@ -17,10 +17,22 @@
 
 #define UNREACHABLE TRAP(UNREACHABLE)
 
+#ifdef __cplusplus
+thread_local
+#else
+_Thread_local 
+#endif
+u32 CurrentIndirectCall = 0;
+
+u32 wasm_get_current_indirect_call_num()
+{
+  return CurrentIndirectCall;
+}
+
 #define CALL_INDIRECT(table, t, ft, x, ...)          \
   (LIKELY((x) < table.size && table.data[x].func &&  \
           table.data[x].func_type == func_types[ft]) \
-       ? ((t)table.data[x].func)(__VA_ARGS__)        \
+       ? (CurrentIndirectCall = x, ((t)table.data[x].func)(__VA_ARGS__))        \
        : TRAP(CALL_INDIRECT))
 
 #define MEMCHECK(mem, a, t)  \

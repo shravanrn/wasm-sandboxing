@@ -18,6 +18,7 @@
 #define WASM_RT_IMPL_H_
 
 #include <setjmp.h>
+#include <vector>
 
 #include "wasm-rt.h"
 
@@ -26,6 +27,10 @@ extern "C" {
 #endif
 
 jmp_buf* wasm_get_setjmp_buff();
+uint32_t wasm_rt_register_func(wasm_rt_anyfunc_t func, uint32_t funcType);
+void wasm_ret_unregister_func(uint32_t slotNumber);
+uint32_t wasm_rt_register_func_type_with_lists(void* params, void* results);
+
 
 #ifdef __cplusplus
 }

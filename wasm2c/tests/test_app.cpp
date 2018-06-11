@@ -28,19 +28,25 @@ size_t invokeSimpleStrLenTestWithHeapString(WasmSandbox* sandbox, const char* st
 	return result;
 }
 
-int invokeSimpleCallbackTest_callback(unsigned a, char* b)
+int invokeSimpleCallbackTest_callback(unsigned a, const char* b, unsigned c[1])
 {
 	return a + strlen(b);
 }
 
-// int invokeSimpleCallbackTest(WasmSandbox* sandbox, void* simpleCallbackTestPtr, unsigned a, char* b, uintptr_t callback)
-// {
-// 	using fnType = int (*)(unsigned, const char*, CallbackType);
-// 	fnType fn = (fnType) sandbox->symbolLookup("simpleCallbackTest");
+int invokeSimpleCallbackTest(WasmSandbox* sandbox, unsigned a, const char* b, int (*callback)(unsigned, const char*, unsigned[1]))
+{
+	using fnType = int (*)(unsigned, const char*, CallbackType);
+	fnType fn = (fnType) sandbox->symbolLookup("simpleCallbackTest");
 
-// 	auto result = sandbox->invokeFunction(fn, a, b, callback);
-// 	return result;
-// }
+	char* bInSandbox = (char*) sandbox->mallocInSandbox(strlen(b) + 1);
+	strcpy(bInSandbox, b);
+	auto registeredCallback = sandbox->registerCallback(callback);
+
+	auto result = sandbox->invokeFunction(fn, a, bInSandbox, registeredCallback);
+	sandbox->freeInSandbox(bInSandbox);
+	sandbox->unregisterCallback(registeredCallback);
+	return result;
+}
 
 int main(int argc, char** argv) {
 
@@ -71,14 +77,11 @@ int main(int argc, char** argv) {
 		exit(1);
 	}
 
-	// sandbox->registerCallback(invokeSimpleCallbackTest_callback);
-
-
-	// if(invokeSimpleCallbackTest(sandbox, 4, "Hello", testParams->registeredCallback) != 10)
-	// {
-	// 	printf("Test 4: Failed\n");
-	// 	exit(1);
-	// }
+	if(invokeSimpleCallbackTest(sandbox, 4, "Hello", invokeSimpleCallbackTest_callback) != 10)
+	{
+		printf("Test 4: Failed\n");
+		exit(1);
+	}
 
 	printf("Tests Completed\n");
 

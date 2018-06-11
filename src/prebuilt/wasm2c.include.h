@@ -28,6 +28,16 @@ const char SECTION_NAME(top)[] =
 "typedef float f32;\n"
 "typedef double f64;\n"
 "\n"
+"extern\n"
+"#ifdef __cplusplus\n"
+"thread_local\n"
+"#else\n"
+"_Thread_local\n"
+"#endif\n"
+"u32 CurrentIndirectCall;\n"
+"\n"
+"u32 wasm_get_current_indirect_call_num();\n"
+"\n"
 "extern void WASM_RT_ADD_PREFIX(init)(void);\n"
 ;
 

@@ -29,6 +29,7 @@
 #include <vector>
 
 #define PAGE_SIZE 65536
+#define FUNC_TABLE_SIZE 1024
 
 typedef struct FuncType {
   wasm_rt_type_t* params;
@@ -75,6 +76,7 @@ uint32_t (*Z_envZ_getTotalMemoryZ_iv)(void);
 void (*Z_envZ____lockZ_vi)(uint32_t);
 void (*Z_envZ____unlockZ_vi)(uint32_t);
 uint32_t (*Z_envZ__emscripten_memcpy_bigZ_iiii)(uint32_t, uint32_t, uint32_t);
+void (*Z_envZ_nullFunc_XZ_vi)(uint32_t);
 void (*Z_envZ_nullFunc_iiZ_vi)(uint32_t);
 void (*Z_envZ_nullFunc_iiiiZ_vi)(uint32_t);
 
@@ -110,6 +112,12 @@ void abortStackOverflowCalled(uint32_t param)
   exit(param);
 }
 
+void nullFunc_X(uint32_t param)
+{
+  printf("Invalid function pointer called with signature 'X': %u", param);
+  exit(param);
+}
+
 void nullFunc_ii(uint32_t param) 
 { 
   printf("Invalid function pointer called with signature 'ii': %u", param);
@@ -130,7 +138,7 @@ void setErrNo(uint32_t value)
 
 uint32_t enlargeMemory() 
 {
-  abortOnCannotGrowMemoryCalled();
+  return abortOnCannotGrowMemoryCalled();
 }
 
 uint32_t getTotalMemory()
@@ -173,6 +181,7 @@ void wasm_init_module()
   Z_envZ____lockZ_vi = lockImpl;
   Z_envZ____unlockZ_vi = unlockImpl;
   Z_envZ__emscripten_memcpy_bigZ_iiii = memcpy_big;
+  Z_envZ_nullFunc_XZ_vi = nullFunc_X;
   Z_envZ_nullFunc_iiZ_vi = nullFunc_ii;
   Z_envZ_nullFunc_iiiiZ_vi = nullFunc_iiii;
 
@@ -189,7 +198,7 @@ void wasm_init_module()
 
   Z_envZ_table = (wasm_rt_table_t *) malloc(sizeof(wasm_rt_table_t));
   memset(Z_envZ_table, 0, sizeof(wasm_rt_table_t));
-  wasm_rt_allocate_table(Z_envZ_table, 0, 1024);
+  wasm_rt_allocate_table(Z_envZ_table, FUNC_TABLE_SIZE, FUNC_TABLE_SIZE);
 
   initModuleSpecificConstants();
 
@@ -244,9 +253,12 @@ static bool func_types_are_equal(FuncType* a, FuncType* b) {
   return 1;
 }
 
+static std::mutex func_tables_mutex;
 uint32_t wasm_rt_register_func_type(uint32_t param_count,
                                     uint32_t result_count,
                                     ...) {
+  std::lock_guard<std::mutex> lock(func_tables_mutex);
+
   FuncType func_type;
   func_type.param_count = param_count;
   func_type.params = (wasm_rt_type_t*) malloc(param_count * sizeof(wasm_rt_type_t));
@@ -293,6 +305,82 @@ uint32_t wasm_rt_register_func_type(uint32_t param_count,
   return idx + 1;
 }
 
+uint32_t wasm_rt_register_func_type_with_lists(void* p_params, void* p_results) {
+  std::lock_guard<std::mutex> lock(func_tables_mutex);
+
+  std::vector<wasm_rt_type_t>& params = *((std::vector<wasm_rt_type_t> *) p_params);
+  std::vector<wasm_rt_type_t>& results = *((std::vector<wasm_rt_type_t> *) p_results);
+
+  FuncType func_type;
+  func_type.param_count = params.size();
+  func_type.params = (wasm_rt_type_t*) malloc(func_type.param_count * sizeof(wasm_rt_type_t));
+  func_type.result_count = results.size();
+  func_type.results = (wasm_rt_type_t*) malloc(func_type.result_count * sizeof(wasm_rt_type_t));
+  if(!func_type.params || !func_type.results)
+  {
+    printf("Failed to allocate register_func_type memory!\n");
+    exit(1);
+  }
+
+  uint32_t i;
+  for (i = 0; i < func_type.param_count; ++i)
+  {
+    func_type.params[i] = params[i];
+  }
+  for (i = 0; i < func_type.result_count; ++i)
+  {
+    func_type.results[i] = results[i];
+  }
+
+  for (i = 0; i < g_func_type_count; ++i) {
+    if (func_types_are_equal(&g_func_types[i], &func_type)) {
+      free(func_type.params);
+      free(func_type.results);
+      return i + 1;
+    }
+  }
+
+  uint32_t idx = g_func_type_count++;
+  g_func_types = (FuncType*) realloc(g_func_types, g_func_type_count * sizeof(FuncType));
+  if(!g_func_types)
+  {
+    printf("Failed to allocate wasm function types table!\n");
+    exit(1);
+  }
+  g_func_types[idx] = func_type;
+  return idx + 1;
+}
+
+uint32_t wasm_rt_register_func(wasm_rt_anyfunc_t func, uint32_t funcType)
+{
+  std::lock_guard<std::mutex> lock(func_tables_mutex);
+
+  for(uint32_t i = 0; i < FUNC_TABLE_SIZE; i++)
+  {
+    //find empty slot
+    if(!Z_envZ_table->data[i].func)
+    {
+      Z_envZ_table->data[i].func = func;
+      Z_envZ_table->data[i].func_type = funcType;
+      return i;
+    }
+  }
+
+  printf("Register functions ran out of slots\n");
+  exit(1);
+}
+
+void wasm_ret_unregister_func(uint32_t slotNumber)
+{
+  std::lock_guard<std::mutex> lock(func_tables_mutex);
+
+  if(slotNumber < FUNC_TABLE_SIZE)
+  {
+    Z_envZ_table->data[slotNumber].func = 0;
+    Z_envZ_table->data[slotNumber].func_type = 0;
+  }
+}
+
 void wasm_rt_allocate_memory(wasm_rt_memory_t* memory,
                              uint32_t initial_pages,
                              uint32_t max_pages) {
@@ -312,6 +400,7 @@ void wasm_rt_allocate_table(wasm_rt_table_t* table,
                             uint32_t max_elements) {
   table->size = elements;
   table->max_size = max_elements;
+  //calloc zero initializes automatically
   table->data = (wasm_rt_elem_t*) calloc(table->size, sizeof(wasm_rt_elem_t));
   if(!table->data)
   {
