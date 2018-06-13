@@ -1,1 +1,8 @@
-cat $1 | grep -o "export \"_[^\"]*\""  | grep -o -P "(?<=\").*(?=\")" | grep -v "^__post_instantiate$" | sed -e "s/^/\'/g" | tr "\n" "," | sed -e "s/,/\', /g" | rev | cut -c 3- | rev
+data=$(cat $1 | grep -o "export \"[^\"]*\""  | grep -o -P "(?<=\").*(?=\")" | grep -v "^__post_instantiate$" | grep -v "^runPostSets$" | grep -v "^fp\$.*$")
+funcs=$(echo "$data" | wc -l)
+funcsWithUnderscore=$(echo "$data" | grep '^_' | wc -l)
+if [ "$funcs" -ne "$funcsWithUnderscore" ]; then
+    #this is the llvm backend, append underscores
+    data=$(echo "$data" | sed -e "s/^/_/g")
+fi
+echo "$data" | sed -e "s/^/\'/g" | tr "\n" "," | sed -e "s/,/\', /g" | rev | cut -c 3- | rev

@@ -6,6 +6,7 @@
 #include <vector>
 #include <map>
 #include <mutex>
+#include <string>
 
 #ifndef WASM_RT_H_
 	//Need some structs from the wasm runtime, but don't want a dependency on that header, so include it manually here
@@ -82,6 +83,7 @@ class WasmSandbox
 {
 private:
 	void* lib;
+	std::string ExportPrefix;
 	jmp_buf* (*wasm_get_setjmp_buff)();
 	uint32_t(*wasm_malloc)(size_t);
 	void(*wasm_free)(uint32_t);

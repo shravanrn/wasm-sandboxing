@@ -12,3 +12,5 @@ uint32_t test32(uint32_t a);
 uint64_t test64(uint64_t a);
 float testFloat(float a);
 double testDouble(double a);
+size_t testLongSize();
+size_t testPtrSize();

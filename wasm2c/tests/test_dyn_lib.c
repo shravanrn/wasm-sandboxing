@@ -43,3 +43,13 @@ double testDouble(double a)
 {
 	return a;
 }
+
+size_t testLongSize()
+{
+	return sizeof(long);
+}
+
+size_t testPtrSize()
+{
+	return sizeof(void*);
+}

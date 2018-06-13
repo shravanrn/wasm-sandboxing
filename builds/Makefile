@@ -16,6 +16,8 @@ else
 	#EMSCRIPTEN_CFLAGS = -O3 -s LINKABLE=1
 endif
 
+# Note edit choice of backend - llvm vs emscripten in ~/.emscripten file by editing llvm_root
+
 wabt_bin: 
 	$(MAKE) -C ../ gcc-release
 

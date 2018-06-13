@@ -66,19 +66,25 @@ double *Z_globalZ_NaNZ_d;
 double *Z_globalZ_InfinityZ_d;
 uint32_t *Z_envZ_ABORTZ_i;
 
+//Create 2 symbols formats for runtime - the emscripten(fastcomp) backend as well as the native llvm wasm backend
+void (*Z_envZ_abortZ_vv)(void);
 void (*Z_envZ__abortZ_vv)(void);
 void (*Z_envZ_abortZ_vi)(uint32_t);
+void (*Z_envZ__abortZ_vi)(uint32_t);
 uint32_t (*Z_envZ_abortOnCannotGrowMemoryZ_iv)();
 void (*Z_envZ_abortStackOverflowZ_vi)(uint32_t);
 void (*Z_envZ____setErrNoZ_vi)(uint32_t);
 uint32_t (*Z_envZ_enlargeMemoryZ_iv)();
 uint32_t (*Z_envZ_getTotalMemoryZ_iv)(void);
+void (*Z_envZ___lockZ_vi)(uint32_t);
 void (*Z_envZ____lockZ_vi)(uint32_t);
+void (*Z_envZ___unlockZ_vi)(uint32_t);
 void (*Z_envZ____unlockZ_vi)(uint32_t);
 uint32_t (*Z_envZ__emscripten_memcpy_bigZ_iiii)(uint32_t, uint32_t, uint32_t);
 void (*Z_envZ_nullFunc_XZ_vi)(uint32_t);
 void (*Z_envZ_nullFunc_iiZ_vi)(uint32_t);
 void (*Z_envZ_nullFunc_iiiiZ_vi)(uint32_t);
+uint32_t (*Z_envZ_sbrkZ_ii)(uint32_t);
 
 extern "C" {
 void init();
@@ -86,7 +92,10 @@ void init();
 void initSyscalls();
 void initModuleSpecificConstants();
 extern uint32_t* STATIC_BUMP;
-extern uint32_t (*_E___errno_location)();
+using ErrNoType = uint32_t (*)();
+ErrNoType errno_location;
+ErrNoType __attribute__((weak)) _E___errno_location = 0;
+ErrNoType __attribute__((weak)) _E__errno_location = 0;
 
 void abortCalledVoid()
 {
@@ -132,7 +141,7 @@ void nullFunc_iiii(uint32_t param)
 
 void setErrNo(uint32_t value)
 {
-  uint32_t loc = _E___errno_location();
+  uint32_t loc = errno_location();
   Z_envZ_memory->data[loc] = value;
 }
 
@@ -144,7 +153,7 @@ uint32_t enlargeMemory()
 uint32_t getTotalMemory()
 {
   //2GB - 1 page
-  return (uint32_t)(((uint64_t)0x10000000) - PAGE_SIZE);
+  return (uint32_t)(((uint64_t)0x80000000) - PAGE_SIZE);
 }
 
 uint32_t memcpy_big(uint32_t dest, uint32_t src, uint32_t num) {
@@ -164,26 +173,70 @@ void unlockImpl(uint32_t lockId)
   lockMap[lockId].unlock();
 }
 
+uint32_t sbrk_impl(uint32_t increment) {
+
+  int32_t oldDynamicTop = Z_envZ_memory->data[*Z_envZ_DYNAMICTOP_PTRZ_i];
+  int32_t newDynamicTop = oldDynamicTop + increment;
+
+  if ((increment > 0 && newDynamicTop < oldDynamicTop) // Detect and fail if we would wrap around signed 32-bit int.
+    || newDynamicTop < 0) { // Also underflow, sbrk() should be able to be used to subtract.
+    return abortOnCannotGrowMemoryCalled();
+    setErrNo(12);
+    return -1;
+  }
+
+  Z_envZ_memory->data[*Z_envZ_DYNAMICTOP_PTRZ_i] = newDynamicTop;
+  int32_t totalMemory = getTotalMemory();
+  if (newDynamicTop > totalMemory) {
+    if (enlargeMemory() == 0) {
+      Z_envZ_memory->data[*Z_envZ_DYNAMICTOP_PTRZ_i] = oldDynamicTop;
+      setErrNo(12);
+      return -1;
+    }
+  }
+
+  return oldDynamicTop;
+}
+
+void getErrLocation()
+{
+  errno_location = _E__errno_location;
+  if(!errno_location)
+  {
+    errno_location = _E___errno_location;
+    if(!errno_location)
+    {
+      printf("Error occurred trying to find the __errno_location symbol");
+      exit(1);
+    }
+  }
+}
+
+uint32_t wasm_is_LLVM_backend()
+{
+  return _E__errno_location != 0;
+}
+
 #define ALIGN4(val) ((val) + 3) & (-4)
 
 void wasm_rt_allocate_memory(wasm_rt_memory_t* memory, uint32_t initial_pages, uint32_t max_pages);
-void wasm_rt_allocate_table(wasm_rt_table_t* table, uint32_t elements, uint32_t max_elements);
 
 void wasm_init_module()
 {
-  Z_envZ__abortZ_vv = abortCalledVoid;
-  Z_envZ_abortZ_vi = abortCalled;
+  Z_envZ_abortZ_vv = Z_envZ__abortZ_vv = abortCalledVoid;
+  Z_envZ_abortZ_vi = Z_envZ__abortZ_vi = abortCalled;
   Z_envZ_abortOnCannotGrowMemoryZ_iv = abortOnCannotGrowMemoryCalled;
   Z_envZ_abortStackOverflowZ_vi = abortStackOverflowCalled;
   Z_envZ____setErrNoZ_vi = setErrNo;
   Z_envZ_enlargeMemoryZ_iv = enlargeMemory;
   Z_envZ_getTotalMemoryZ_iv = getTotalMemory;
-  Z_envZ____lockZ_vi = lockImpl;
-  Z_envZ____unlockZ_vi = unlockImpl;
+  Z_envZ___lockZ_vi = Z_envZ____lockZ_vi = lockImpl;
+  Z_envZ___unlockZ_vi = Z_envZ____unlockZ_vi = unlockImpl;
   Z_envZ__emscripten_memcpy_bigZ_iiii = memcpy_big;
   Z_envZ_nullFunc_XZ_vi = nullFunc_X;
   Z_envZ_nullFunc_iiZ_vi = nullFunc_ii;
   Z_envZ_nullFunc_iiiiZ_vi = nullFunc_iiii;
+  Z_envZ_sbrkZ_ii = sbrk_impl;
 
   Z_envZ_memoryBaseZ_i = (uint32_t *) malloc(sizeof(uint32_t));
   *Z_envZ_memoryBaseZ_i = 1024u;
@@ -198,7 +251,7 @@ void wasm_init_module()
 
   Z_envZ_table = (wasm_rt_table_t *) malloc(sizeof(wasm_rt_table_t));
   memset(Z_envZ_table, 0, sizeof(wasm_rt_table_t));
-  wasm_rt_allocate_table(Z_envZ_table, FUNC_TABLE_SIZE, FUNC_TABLE_SIZE);
+  wasm_rt_allocate_table_real(Z_envZ_table, FUNC_TABLE_SIZE, FUNC_TABLE_SIZE);
 
   initModuleSpecificConstants();
 
@@ -228,6 +281,14 @@ void wasm_init_module()
   initSyscalls();
 
   init();
+
+  getErrLocation();
+
+  if(wasm_is_LLVM_backend())
+  {
+    uint32_t* loc0 = (uint32_t*)(&(Z_envZ_memory->data[*Z_envZ_memoryBaseZ_i]));
+    *loc0 = 0x63736d65;
+  }
 }
 
 jmp_buf* wasm_get_setjmp_buff()
@@ -395,7 +456,7 @@ void wasm_rt_allocate_memory(wasm_rt_memory_t* memory,
   }
 }
 
-void wasm_rt_allocate_table(wasm_rt_table_t* table,
+void wasm_rt_allocate_table_real(wasm_rt_table_t* table,
                             uint32_t elements,
                             uint32_t max_elements) {
   table->size = elements;
@@ -407,4 +468,12 @@ void wasm_rt_allocate_table(wasm_rt_table_t* table,
     printf("Failed to allocate sandbox Wasm table!\n");
     exit(1);
   }
+}
+
+//basically a no-op
+void wasm_rt_allocate_table(wasm_rt_table_t* table,
+                            uint32_t elements,
+                            uint32_t max_elements) {
+  //make sure the internal function table is the same as the external function table
+  *table = *Z_envZ_table;
 }

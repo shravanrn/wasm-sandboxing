@@ -31,6 +31,12 @@ WasmSandbox* WasmSandbox::createSandbox(const char* path)
 
 	wasm_init_module();
 
+	using intvoidPtr = uint32_t(*)();
+	intvoidPtr wasm_is_LLVM_backend;
+	getSymbol(wasm_is_LLVM_backend, intvoidPtr, wasm_is_LLVM_backend);
+
+	ret->ExportPrefix = wasm_is_LLVM_backend()? "_E" : "_E_";
+
 	using jmpbufpvoidPtr = jmp_buf*(*)();
 	getSymbol(ret->wasm_get_setjmp_buff, jmpbufpvoidPtr, wasm_get_setjmp_buff);
 
@@ -62,7 +68,7 @@ WasmSandbox* WasmSandbox::createSandbox(const char* path)
 
 void* WasmSandbox::symbolLookup(const char* name)
 {
-	std::string exportName = "_E_";
+	std::string exportName = ExportPrefix;
 	exportName += name;
 	void** symbolAddr = (void**)(dlsym(lib, exportName.c_str()));
 
