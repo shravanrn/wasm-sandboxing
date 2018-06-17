@@ -1,10 +1,1 @@
-*.wasm
-*.so
-/test_app
-/wasm_test_dyn_lib.c
-/wasm_test_dyn_lib.h
-*.wat
-*.js
-/wasm_test_dyn_lib_rt.c
-*.wast
-/wasm_test_dyn_lib_rt.cpp
+/out/
