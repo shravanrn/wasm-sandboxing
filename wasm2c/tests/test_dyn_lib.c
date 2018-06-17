@@ -53,3 +53,16 @@ size_t testPtrSize()
 {
 	return sizeof(void*);
 }
+
+int printsize_tSize()
+{
+	return sizeof(size_t);
+}
+int printchar_pSize()
+{
+	return sizeof(char*);
+}
+int printintSize()
+{
+	return sizeof(int);
+}

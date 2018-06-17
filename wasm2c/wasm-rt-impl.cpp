@@ -84,7 +84,7 @@ uint32_t (*Z_envZ__emscripten_memcpy_bigZ_iiii)(uint32_t, uint32_t, uint32_t);
 void (*Z_envZ_nullFunc_XZ_vi)(uint32_t);
 void (*Z_envZ_nullFunc_iiZ_vi)(uint32_t);
 void (*Z_envZ_nullFunc_iiiiZ_vi)(uint32_t);
-uint32_t (*Z_envZ_sbrkZ_ii)(uint32_t);
+uint32_t (*Z_envZ_sbrkZ_ij)(uint64_t);
 
 extern "C" {
 void init();
@@ -173,8 +173,9 @@ void unlockImpl(uint32_t lockId)
   lockMap[lockId].unlock();
 }
 
-uint32_t sbrk_impl(uint32_t increment) {
+uint32_t sbrk_impl(uint64_t increment64) {
 
+  int32_t increment = increment64; //clear top bits
   int32_t oldDynamicTop = Z_envZ_memory->data[*Z_envZ_DYNAMICTOP_PTRZ_i];
   int32_t newDynamicTop = oldDynamicTop + increment;
 
@@ -236,7 +237,7 @@ void wasm_init_module()
   Z_envZ_nullFunc_XZ_vi = nullFunc_X;
   Z_envZ_nullFunc_iiZ_vi = nullFunc_ii;
   Z_envZ_nullFunc_iiiiZ_vi = nullFunc_iiii;
-  Z_envZ_sbrkZ_ii = sbrk_impl;
+  Z_envZ_sbrkZ_ij = sbrk_impl;
 
   Z_envZ_memoryBaseZ_i = (uint32_t *) malloc(sizeof(uint32_t));
   *Z_envZ_memoryBaseZ_i = 1024u;
