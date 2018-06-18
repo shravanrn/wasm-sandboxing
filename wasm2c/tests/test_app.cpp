@@ -9,7 +9,7 @@
 int invokeSimpleAddTest(WasmSandbox* sandbox, int a, int b)
 {
 	using fnType = unsigned long(*)(unsigned long, unsigned long);
-	fnType fn = (fnType) sandbox->symbolLookup("simpleAddNoPrintTest");
+	fnType fn = (fnType) sandbox->symbolLookup("simpleAddTest");
 
 	auto result = sandbox->invokeFunction(fn, a, b);
 	return result;

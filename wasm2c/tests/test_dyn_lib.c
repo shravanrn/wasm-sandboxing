@@ -1,24 +1,35 @@
 #include "test_dyn_lib.h"
 #include <string.h>
+#include <stdio.h>
 
 unsigned long simpleAddNoPrintTest(unsigned long a, unsigned long b)
 {
 	return a + b;
 }
 
+unsigned long simpleAddTest(unsigned long a, unsigned long b)
+{
+	printf("simpleAddTest\n");
+	fflush(stdout);
+	return a + b;
+}
+
 size_t simpleStrLenTest(const char* str)
 {
+	printf("simpleStrLenTest\n");
 	return strlen(str);
 }
 
 int simpleCallbackTest(unsigned a, const char* b, CallbackType callback)
 {
+	printf("simpleCallbackTest\n");
 	int ret = callback(a + 1, b, &a);
 	return ret;
 }
 
 char* simpleEchoTest(char * str)
 {
+	printf("simpleEchoTest\n");
 	return str;
 }
 
@@ -65,4 +76,8 @@ int printchar_pSize()
 int printintSize()
 {
 	return sizeof(int);
+}
+void printTest()
+{
+	printf("Hello!");
 }
