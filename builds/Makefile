@@ -34,17 +34,17 @@ build64: wabt_bin wasm_sandbox_lib
 	#This new setup fails if we mix it with SIDE_MODULE flag
 	#So compile a basic program first
 	export EMCC_EXPERIMENTAL_USE_LLD=0
-	emcc ../hello_world.c -O0 -s WASM=1 -s EMULATED_FUNCTION_POINTERS=1 -o dummy.js
-	emcc ../test_dyn_lib.c $(EMSCRIPTEN_CFLAGS) -s WASM=1 -s SIDE_MODULE=1 -s EMULATED_FUNCTION_POINTERS=1 -o test_dyn_lib_my.wasm
-	../../../bin/wasm2wat --inline-exports --inline-imports -f test_dyn_lib_my.wasm -o test_dyn_lib_my.wat
+	emcc ../hello_world.c -O0 -s WASM=1 -s EMULATED_FUNCTION_POINTERS=1 -o dummy.js || exit 1
+	emcc ../test_dyn_lib.c $(EMSCRIPTEN_CFLAGS) -s WASM=1 -s SIDE_MODULE=1 -s EMULATED_FUNCTION_POINTERS=1 -o test_dyn_lib_my.wasm  || exit 1
+	../../../bin/wasm2wat --inline-exports --inline-imports -f test_dyn_lib_my.wasm -o test_dyn_lib_my.wat  || exit 1
 	# There is a tool failure if we try setting the total memory to 4GB (causing a u32 overflow) and 
 	# a runtime failure of signed vs unsigned if we set this to more that 2GB. So we set it to (2GB - 64KB)
-	bash -c 'emcc ../test_dyn_lib.c $(EMSCRIPTEN_CFLAGS) -s WASM=1 -s TOTAL_MEMORY=2147418112 -s ALLOW_MEMORY_GROWTH=0 -s LEGALIZE_JS_FFI=0 -s EMULATED_FUNCTION_POINTERS=1 -s "EXPORTED_FUNCTIONS=[$$(../../../builds/getWastFunctions ./test_dyn_lib_my.wat), '_malloc', '_free']" -o wasm_test_dyn_lib.js'
-	../../../bin/wasm2wat --inline-exports --inline-imports -f wasm_test_dyn_lib.wasm -o wasm_test_dyn_lib.wat
-	../../../bin/wasm2c wasm_test_dyn_lib.wasm -o wasm_test_dyn_lib.c
-	../../../builds/generateModuleSpecificConstants wasm_test_dyn_lib.js > wasm_test_dyn_lib_rt.cpp
-	g++ $(CFLAGS) ../../wasm-rt-impl.cpp ../../wasm-rt-syscall-impl.cpp wasm_test_dyn_lib_rt.cpp wasm_test_dyn_lib.c -I ../../ -fPIC -shared -o libwasm_test_dyn_lib.so
-	g++ $(CFLAGS) ../test_app.cpp ../../../bin/libwasm_sandbox.a -o test_app -ldl
+	bash -c 'emcc ../test_dyn_lib.c $(EMSCRIPTEN_CFLAGS) -s WASM=1 -s TOTAL_MEMORY=2147418112 -s ALLOW_MEMORY_GROWTH=0 -s LEGALIZE_JS_FFI=0 -s EMULATED_FUNCTION_POINTERS=1 -s "EXPORTED_FUNCTIONS=[$$(../../../builds/getWastFunctions ./test_dyn_lib_my.wat), '_malloc', '_free']" -o wasm_test_dyn_lib.js' || exit 1
+	../../../bin/wasm2wat --inline-exports --inline-imports -f wasm_test_dyn_lib.wasm -o wasm_test_dyn_lib.wat || exit 1
+	../../../bin/wasm2c wasm_test_dyn_lib.wasm -o wasm_test_dyn_lib.c || exit 1
+	../../../builds/generateModuleSpecificConstants wasm_test_dyn_lib.js > wasm_test_dyn_lib_rt.cpp || exit 1
+	g++ $(CFLAGS) ../../wasm-rt-impl.cpp ../../wasm-rt-syscall-impl.cpp wasm_test_dyn_lib_rt.cpp wasm_test_dyn_lib.c -I ../../ -fPIC -shared -o libwasm_test_dyn_lib.so || exit 1
+	g++ $(CFLAGS) ../test_app.cpp ../../../bin/libwasm_sandbox.a -o test_app -ldl || exit 1
 
 run64:
 	cd ../wasm2c/tests/out && ./test_app
