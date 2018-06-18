@@ -168,11 +168,13 @@ private:
 		return arg;
 	}
 
+	template<typename T,typename std::enable_if<std::is_same<T, float>::value>::type* = nullptr>
 	float convertReturnValue(float arg)
 	{
 		return arg;
 	}
 
+	template<typename T,typename std::enable_if<std::is_same<T, double>::value>::type* = nullptr>
 	double convertReturnValue(double arg)
 	{
 		return arg;
@@ -244,6 +246,36 @@ private:
 		return WASM_RT_I32;
 	}
 
+	//Handle the fact that struct returns are passed as out params per the calling convention
+	template<typename TRet, typename... TArgs>
+	typename std::enable_if<!std::is_class<TRet>::value,
+	TRet>::type invokeFunctionWithArgsAndRetParam(void* fnPtr, TArgs... args)
+	{
+		using WasmRetType = wasm_return_type<TRet>;
+		using TargetFuncType = WasmRetType(*)(TArgs...);
+		TargetFuncType fnPtrCast = (TargetFuncType) fnPtr;
+		auto ret = (*fnPtrCast)(args...);
+
+		TRet convertedRet = convertReturnValue<TRet>(ret);
+		return convertedRet;
+	}
+
+	template<typename TRet, typename... TArgs>
+	typename std::enable_if<std::is_class<TRet>::value,
+	TRet>::type invokeFunctionWithArgsAndRetParam(void* fnPtr, TArgs... args)
+	{
+		TRet* ret = (TRet*) mallocInSandbox(sizeof(TRet));
+		uint32_t retp = (uintptr_t) getSandboxedPointer(ret);
+
+		using TargetFuncType = void(*)(uint32_t, TArgs...);
+		TargetFuncType fnPtrCast = (TargetFuncType) fnPtr;
+		(*fnPtrCast)(retp, args...);
+
+		TRet retCopy = *ret;
+		freeInSandbox(ret);
+		return retCopy;
+	}
+
 	template<typename TRet, typename... TArgs>
 	typename std::enable_if<!std::is_void<TRet>::value,
 	TRet>::type
@@ -252,10 +284,7 @@ private:
 		auto oldCurrThreadSandbox = WasmSandboxImpl::CurrThreadSandbox;
 		WasmSandboxImpl::CurrThreadSandbox = this;
 
-		using WasmRetType = wasm_return_type<TRet>;
-		using TargetFuncType = WasmRetType(*)(TArgs...);
-		TargetFuncType fnPtrCast = (TargetFuncType) fnPtr;
-		auto ret = (*fnPtrCast)(args...);
+		auto ret = invokeFunctionWithArgsAndRetParam<TRet, TArgs...>(fnPtr, args...);
 
 		WasmSandboxImpl::CurrThreadSandbox = oldCurrThreadSandbox;
 
@@ -264,7 +293,6 @@ private:
 			freeInSandbox(ptr);
 		}
 
-		TRet convertedRet = convertReturnValue<TRet>(ret);
 		return ret;
 	}
 
@@ -396,8 +424,11 @@ public:
 
 	void unregisterCallback(WasmSandboxCallback callback);
 
-	void* getUnsandboxedPointer(void* p);
-	void* getSandboxedPointer(void* p);
+	void* getUnsandboxedPointer(const void* p);
+	void* getSandboxedPointer(const void* p);
+
+	int isAddressInNonSandboxMemoryOrNull(const void* p);
+	int isAddressInSandboxMemoryOrNull(const void* p);
 
 	void* mallocInSandbox(size_t size);
 	void freeInSandbox(void* ptr);

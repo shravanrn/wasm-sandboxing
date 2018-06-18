@@ -109,7 +109,7 @@ void WasmSandbox::unregisterCallback(WasmSandboxCallback callback)
 	wasm_ret_unregister_func(callback.callbackSlot);
 }
 
-void* WasmSandbox::getUnsandboxedPointer(void* p)
+void* WasmSandbox::getUnsandboxedPointer(const void* p)
 {
 	#if defined(_M_X64) || defined(__x86_64__)
 
@@ -131,7 +131,7 @@ void* WasmSandbox::getUnsandboxedPointer(void* p)
 	#endif
 }
 
-void* WasmSandbox::getSandboxedPointer(void* p)
+void* WasmSandbox::getSandboxedPointer(const void* p)
 {
 	#if defined(_M_X64) || defined(__x86_64__)
 
@@ -152,6 +152,18 @@ void* WasmSandbox::getSandboxedPointer(void* p)
 	#else
 		#error Unsupported Platform!
 	#endif
+}
+
+int WasmSandbox::isAddressInNonSandboxMemoryOrNull(const void* p)
+{
+	void* wasm_memory_end = (void*) (((uintptr_t)wasm_memory) + wasm_memory_size);
+	return p == nullptr || p < wasm_memory || p >= wasm_memory_end;
+}
+
+int WasmSandbox::isAddressInSandboxMemoryOrNull(const void* p)
+{
+	void* wasm_memory_end = (void*) (((uintptr_t)wasm_memory) + wasm_memory_size);
+	return p == nullptr || !(p < wasm_memory || p >= wasm_memory_end);
 }
 
 void* WasmSandbox::mallocInSandbox(size_t size)

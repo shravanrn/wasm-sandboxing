@@ -3,17 +3,20 @@
 #include <string.h>
 #include <dlfcn.h>
 #include <stdint.h>
+#include <limits.h>
 #include "../wasm_sandbox.h"
 #include "test_dyn_lib.h"
 
 int invokeSimpleAddTest(WasmSandbox* sandbox, int a, int b)
 {
-	using fnType = unsigned long(*)(unsigned long, unsigned long);
+	using fnType = int (*)(int, int);
 	fnType fn = (fnType) sandbox->symbolLookup("simpleAddTest");
 
 	auto result = sandbox->invokeFunction(fn, a, b);
 	return result;
 }
+
+//////////////////////////////////////////////////////////////////
 
 size_t invokeSimpleStrLenTestWithHeapString(WasmSandbox* sandbox, const char* str)
 {
@@ -27,6 +30,8 @@ size_t invokeSimpleStrLenTestWithHeapString(WasmSandbox* sandbox, const char* st
 	sandbox->freeInSandbox(strInSandbox);
 	return result;
 }
+
+//////////////////////////////////////////////////////////////////
 
 int invokeSimpleCallbackTest_callback(unsigned a, const char* b, unsigned c[1])
 {
@@ -47,6 +52,91 @@ int invokeSimpleCallbackTest(WasmSandbox* sandbox, unsigned a, const char* b, in
 	sandbox->unregisterCallback(registeredCallback);
 	return result;
 }
+
+//////////////////////////////////////////////////////////////////
+
+int invokeSimpleEchoTestPassed(WasmSandbox* sandbox, const char* str)
+{
+	char* strInSandbox;
+	char* retStr;
+	int ret;
+
+	//str is allocated in our heap, not the sandbox's heap
+	if(!sandbox->isAddressInNonSandboxMemoryOrNull(str))
+	{
+		return 0;
+	}
+
+	strInSandbox = (char*) sandbox->mallocInSandbox(strlen(str) + 1);
+	strcpy(strInSandbox, str);
+
+	//str is allocated in sandbox heap, not our heap
+	if(!sandbox->isAddressInSandboxMemoryOrNull(strInSandbox))
+	{
+		return 0;
+	}
+
+	using fnType = char* (*)(char *);
+	fnType fn = (fnType) sandbox->symbolLookup("simpleEchoTest");
+
+	retStr = sandbox->invokeFunction(fn, strInSandbox);
+
+	//retStr is allocated in sandbox heap, not our heap
+	if(!sandbox->isAddressInSandboxMemoryOrNull(retStr))
+	{
+		return 0;
+	}
+
+	ret = strcmp(str, retStr) == 0;
+
+	sandbox->freeInSandbox(strInSandbox);
+
+	return ret;
+}
+
+//////////////////////////////////////////////////////////////////
+
+double invokeSimpleDoubleAddTest(WasmSandbox* sandbox, double a, double b)
+{
+	using fnType = double (*)(double, double);
+	fnType fn = (fnType) sandbox->symbolLookup("simpleDoubleAddTest");
+
+	auto result = sandbox->invokeFunction(fn, a, b);
+	return result;
+}
+
+//////////////////////////////////////////////////////////////////
+
+unsigned long invokeSimpleLongAddTest(WasmSandbox* sandbox, unsigned long a, unsigned long b)
+{
+	using fnType = unsigned long (*)(unsigned long, unsigned long);
+	fnType fn = (fnType) sandbox->symbolLookup("simpleLongAddTest");
+
+	auto result = sandbox->invokeFunction(fn, a, b);
+	return result;
+}
+
+//////////////////////////////////////////////////////////////////
+
+int invokeSimpleTestStructValTest(WasmSandbox* sandbox)
+{
+	using fnType = struct testStruct (*)();
+	fnType fn = (fnType) sandbox->symbolLookup("simpleTestStructVal");
+
+	auto result = sandbox->invokeFunction(fn);
+
+	if(result.fieldLong != 7 || 
+		strcmp((char*) sandbox->getUnsandboxedPointer(result.fieldString), "Hello") != 0 || 
+		result.fieldBool != 1 || 
+		strcmp(result.fieldFixedArr, "Bye"))
+	{
+		return 0;
+	}
+
+	return 1;
+}
+
+//////////////////////////////////////////////////////////////////
 
 int main(int argc, char** argv) {
 
@@ -81,6 +171,36 @@ int main(int argc, char** argv) {
 	{
 		printf("Test 4: Failed\n");
 		exit(1);
+	}
+
+	// if(!fileTestPassed(sandbox))
+	// {
+	// 	printf("Test 5: Failed\n");
+	// 	exit(1);	
+	// }
+
+	if(!invokeSimpleEchoTestPassed(sandbox, "Hello"))
+	{
+		printf("Test 6: Failed\n");
+		exit(1);	
+	}
+
+	if(invokeSimpleDoubleAddTest(sandbox, 1.0, 2.0) != 3.0)
+	{
+		printf("Test 7: Failed\n");
+		exit(1);
+	}
+
+	if(invokeSimpleLongAddTest(sandbox, ULONG_MAX - 1, 1) != ULONG_MAX)
+	{
+		printf("Test 8: Failed\n");
+		exit(1);	
+	}
+
+	if(!invokeSimpleTestStructValTest(sandbox))
+	{
+		printf("Test 9: Failed\n");
+		exit(1);	
 	}
 
 	printf("Tests Completed\n");

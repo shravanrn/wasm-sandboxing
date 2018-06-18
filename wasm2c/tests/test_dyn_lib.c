@@ -7,7 +7,7 @@ unsigned long simpleAddNoPrintTest(unsigned long a, unsigned long b)
 	return a + b;
 }
 
-unsigned long simpleAddTest(unsigned long a, unsigned long b)
+int simpleAddTest(int a, int b)
 {
 	printf("simpleAddTest\n");
 	fflush(stdout);
@@ -32,6 +32,34 @@ char* simpleEchoTest(char * str)
 	printf("simpleEchoTest\n");
 	return str;
 }
+
+double simpleDoubleAddTest(const double a, const double b)
+{
+	printf("simpleDoubleAddTest\n");
+	return a + b;
+}
+
+unsigned long simpleLongAddTest(unsigned long a, unsigned long b)
+{
+	printf("simpleLongAddTest\n");
+	fflush(stdout);
+	return a + b;
+}
+
+struct testStruct simpleTestStructVal()
+{
+	printf("simpleTestStructVal\n");
+	struct testStruct ret;
+	ret.fieldLong = 7;
+	ret.fieldString = "Hello";
+	//explicitly mess up the top bits of the pointer. The sandbox checks outside the sandbox should catch this
+	ret.fieldString = (char *)((((uintptr_t) ret.fieldString) & 0xFFFFFFFF) | 0x1234567800000000);
+	ret.fieldBool = 1;
+	strcpy(ret.fieldFixedArr, "Bye");
+	return ret;
+}
+
+/////////////////////////////////
 
 unsigned long getVal()
 {
