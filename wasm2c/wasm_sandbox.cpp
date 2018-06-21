@@ -114,7 +114,11 @@ void* WasmSandbox::getUnsandboxedPointer(const void* p)
 	#if defined(_M_X64) || defined(__x86_64__)
 
 		uintptr_t pVal = ((uintptr_t) p);
-		if(pVal < wasm_memory_size)
+		if(pVal == 0)
+		{
+			return nullptr;
+		}
+		else if(pVal < wasm_memory_size)
 		{
 			uintptr_t wasm_memoryVal = ((uintptr_t)wasm_memory);
 			uintptr_t ret = pVal + wasm_memoryVal;
@@ -138,7 +142,16 @@ void* WasmSandbox::getSandboxedPointer(const void* p)
 		//Wasm memory should be fixed at 4GB
 		uintptr_t pVal = ((uintptr_t) p);
 		uintptr_t wasm_memoryVal = ((uintptr_t)wasm_memory);
-		if(pVal > wasm_memoryVal && (pVal - wasm_memoryVal < wasm_memory_size))
+		if(pVal == 0)
+		{
+			return nullptr;
+		}
+		else if(pVal == wasm_memoryVal)
+		{
+			printf("WasmSandbox::getSandboxedPointer called with the sentinel null location.\n");
+			abort();
+		}
+		else if(pVal > wasm_memoryVal && (pVal - wasm_memoryVal < wasm_memory_size))
 		{
 			uintptr_t ret = pVal - wasm_memoryVal;
 			return (void*) ret;

@@ -20,6 +20,7 @@ char* simpleEchoTest(char * str);
 double simpleDoubleAddTest(const double a, const double b);
 unsigned long simpleLongAddTest(unsigned long a, unsigned long b);
 struct testStruct simpleTestStructVal();
+void* simpleNullTest(void* shouldBeNull);
 
 uint32_t test32(uint32_t a);
 uint64_t test64(uint64_t a);

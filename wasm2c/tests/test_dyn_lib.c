@@ -59,6 +59,16 @@ struct testStruct simpleTestStructVal()
 	return ret;
 }
 
+void* simpleNullTest(void* shouldBeNull)
+{
+	if(shouldBeNull == 0)
+	{
+		return 0;
+	}
+
+	return (void*) 1;
+}
+
 /////////////////////////////////
 
 unsigned long getVal()
@@ -108,4 +118,9 @@ int printintSize()
 void printTest()
 {
 	printf("Hello!");
+}
+
+void* returnNullTest()
+{
+	return 0;
 }

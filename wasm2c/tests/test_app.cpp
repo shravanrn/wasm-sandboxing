@@ -138,6 +138,23 @@ int invokeSimpleTestStructValTest(WasmSandbox* sandbox)
 
 //////////////////////////////////////////////////////////////////
 
+int invokeSimpleNullTest(WasmSandbox* sandbox)
+{
+	using fnType = void* (*)(void*);
+	fnType fn = (fnType) sandbox->symbolLookup("simpleNullTest");
+
+	auto result = sandbox->invokeFunction(fn, (void*) 0);
+
+	if(result == nullptr)
+	{
+		return 1;
+	}
+
+	return 0;
+}
+
+//////////////////////////////////////////////////////////////////
+
 int main(int argc, char** argv) {
 
 	printf("Running test\n");
@@ -200,6 +217,12 @@ int main(int argc, char** argv) {
 	if(!invokeSimpleTestStructValTest(sandbox))
 	{
 		printf("Test 9: Failed\n");
+		exit(1);	
+	}
+
+	if(!invokeSimpleNullTest(sandbox))
+	{
+		printf("Test 10: Failed\n");
 		exit(1);	
 	}
 
