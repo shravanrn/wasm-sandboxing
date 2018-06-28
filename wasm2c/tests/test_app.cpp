@@ -155,6 +155,63 @@ int invokeSimpleNullTest(WasmSandbox* sandbox)
 
 //////////////////////////////////////////////////////////////////
 
+unsigned long invokeSimpleOffsetTest(WasmSandbox* sandbox)
+{
+	using fnType = unsigned long (*)();
+	fnType fn = (fnType) sandbox->symbolLookup("getOffset");
+
+	auto result = sandbox->invokeFunction(fn);
+	struct testStruct2 test;
+	uintptr_t offset = (uintptr_t) &(test.ptr_list[1]);
+	auto expectedResult = offset - ((uintptr_t)&test);
+	
+	if(result != expectedResult)
+	{
+		return 0;
+	}
+
+	return 1;
+}
+
+//////////////////////////////////////////////////////////////////
+
+unsigned long invokeSimpleStructValTest(WasmSandbox* sandbox)
+{
+	using fnType = unsigned long (*)(struct testStruct4*);
+	fnType fn = (fnType) sandbox->symbolLookup("getStructVal");
+
+	struct testStruct4* test = (struct testStruct4*) sandbox->mallocInSandbox(sizeof(struct testStruct4));
+	test->ptr = (void*) 0x1234;
+
+	auto result = sandbox->invokeFunction(fn, test);
+	
+	if(result != 0x1234)
+	{
+		return 0;
+	}
+
+	return 1;
+}
+
+//////////////////////////////////////////////////////////////////
+
+unsigned long invokeSimpleReturnElementTest(WasmSandbox* sandbox)
+{
+	using fnType = int (*)(int);
+	fnType fn = (fnType) sandbox->symbolLookup("returnElement");
+
+	auto result = sandbox->invokeFunction(fn, 1);
+	
+	if(result != 1)
+	{
+		return 0;
+	}
+
+	return 1;
+}
+
+//////////////////////////////////////////////////////////////////
+
 int main(int argc, char** argv) {
 
 	printf("Running test\n");
@@ -223,6 +280,24 @@ int main(int argc, char** argv) {
 	if(!invokeSimpleNullTest(sandbox))
 	{
 		printf("Test 10: Failed\n");
+		exit(1);	
+	}
+
+	if(!invokeSimpleOffsetTest(sandbox))
+	{
+		printf("Test 11: Failed\n");
+		exit(1);	
+	}
+
+	if(!invokeSimpleStructValTest(sandbox))
+	{
+		printf("Test 12: Failed\n");
+		exit(1);	
+	}
+
+	if(!invokeSimpleReturnElementTest(sandbox))
+	{
+		printf("Test 13: Failed\n");
 		exit(1);	
 	}
 

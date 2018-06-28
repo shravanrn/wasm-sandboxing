@@ -24,6 +24,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <setjmp.h>
+#include <math.h>
 #include <mutex>
 #include <map>
 #include <vector>
@@ -85,6 +86,10 @@ void (*Z_envZ_nullFunc_XZ_vi)(uint32_t);
 void (*Z_envZ_nullFunc_iiZ_vi)(uint32_t);
 void (*Z_envZ_nullFunc_iiiiZ_vi)(uint32_t);
 uint32_t (*Z_envZ_sbrkZ_ij)(uint64_t);
+void (*Z_envZ_exitZ_vi)(uint32_t);
+uint32_t (*Z_envZ_getenvZ_ii)(uint32_t);
+void (*Z_envZ___buildEnvironmentZ_vi)(uint32_t);
+double (*Z_envZ_fabsZ_dd)(double);
 
 extern "C" {
 void init();
@@ -213,6 +218,19 @@ void getErrLocation()
   }
 }
 
+void buildEnvironment(uint32_t ptr)
+{
+  //for now we don't support environments
+  Z_envZ_memory->data[ptr] = 0;
+}
+
+uint32_t getenv_impl(uint32_t name)
+{
+  //for now we don't support looking at environment variables
+  return 0;
+}
+
+
 uint32_t wasm_is_LLVM_backend()
 {
   return _E__errno_location != 0;
@@ -238,6 +256,10 @@ void wasm_init_module()
   Z_envZ_nullFunc_iiZ_vi = nullFunc_ii;
   Z_envZ_nullFunc_iiiiZ_vi = nullFunc_iiii;
   Z_envZ_sbrkZ_ij = sbrk_impl;
+  Z_envZ_exitZ_vi = (decltype(Z_envZ_exitZ_vi))exit;
+  Z_envZ_getenvZ_ii = getenv_impl;
+  Z_envZ___buildEnvironmentZ_vi = buildEnvironment;
+  Z_envZ_fabsZ_dd = fabs;
 
   Z_envZ_memoryBaseZ_i = (uint32_t *) malloc(sizeof(uint32_t));
   *Z_envZ_memoryBaseZ_i = 1024u;
@@ -375,13 +397,34 @@ uint32_t wasm_rt_register_func_type_with_lists(void* p_params, void* p_results) 
 
   FuncType func_type;
   func_type.param_count = params.size();
-  func_type.params = (wasm_rt_type_t*) malloc(func_type.param_count * sizeof(wasm_rt_type_t));
-  func_type.result_count = results.size();
-  func_type.results = (wasm_rt_type_t*) malloc(func_type.result_count * sizeof(wasm_rt_type_t));
-  if(!func_type.params || !func_type.results)
+
+  if(func_type.param_count != 0)
   {
-    printf("Failed to allocate register_func_type memory!\n");
-    exit(1);
+    func_type.params = (wasm_rt_type_t*) malloc(func_type.param_count * sizeof(wasm_rt_type_t));
+    if(!func_type.params)
+    {
+      printf("Failed to allocate register_func_type memory!\n");
+      exit(1);
+    }
+  }
+  else
+  {
+    func_type.params = 0;
+  }
+
+  func_type.result_count = results.size();
+  if(func_type.result_count != 0)
+  {
+    func_type.results = (wasm_rt_type_t*) malloc(func_type.result_count * sizeof(wasm_rt_type_t));
+    if(!func_type.results)
+    {
+      printf("Failed to allocate register_func_type memory!\n");
+      exit(1);
+    }
+  }
+  else
+  {
+    func_type.results = 0;
   }
 
   uint32_t i;
@@ -396,8 +439,14 @@ uint32_t wasm_rt_register_func_type_with_lists(void* p_params, void* p_results) 
 
   for (i = 0; i < g_func_type_count; ++i) {
     if (func_types_are_equal(&g_func_types[i], &func_type)) {
-      free(func_type.params);
-      free(func_type.results);
+      if(func_type.params)
+      {
+        free(func_type.params);
+      }
+      if(func_type.results)
+      {
+        free(func_type.results);
+      }
       return i + 1;
     }
   }

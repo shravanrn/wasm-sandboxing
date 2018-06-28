@@ -1,0 +1,1 @@
+llvm-nm -f posix --defined-only $1 | grep " T " | cut -d " " -f1 | sed -e "s/^/_/g" | sed -e "s/^/\'/g" | tr "\n" "," | sed -e "s/,/\', /g" | rev | cut -c 3- | rev

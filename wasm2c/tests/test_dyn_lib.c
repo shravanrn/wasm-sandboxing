@@ -124,3 +124,34 @@ void* returnNullTest()
 {
 	return 0;
 }
+
+unsigned long getOffset()
+{
+	struct testStruct2 test;
+	uintptr_t offset = (uintptr_t) &(test.ptr_list[1]);
+	unsigned long result = offset - ((uintptr_t)&test);
+	return result;
+}
+
+unsigned long getStructVal(struct testStruct4* p)
+{
+	return (unsigned long) p->ptr;
+}
+
+unsigned char jpeg_nbits_table[] = {
+   0,  1,  2,  2,  3,  3,  3,  3,  4,  4,  4,  4,  4,  4,  4,  4,
+   5,  5,  5,  5,  5,  5,  5,  5,  5,  5,  5,  5,  5,  5,  5,  5,
+   6,  6,  6,  6,  6,  6,  6,  6,  6,  6,  6,  6,  6,  6,  6,  6,
+   6,  6,  6,  6,  6,  6,  6,  6,  6,  6,  6,  6,  6,  6,  6,  6,
+   7,  7,  7,  7,  7,  7,  7,  7,  7,  7,  7,  7,  7,  7,  7,  7,
+   7,  7,  7,  7,  7,  7,  7,  7,  7,  7,  7,  7,  7,  7,  7,  7,
+   7,  7,  7,  7,  7,  7,  7,  7,  7,  7,  7,  7,  7,  7,  7,  7,
+   7,  7,  7,  7,  7,  7,  7,  7,  7,  7,  7,  7,  7,  7,  7,  7,
+   8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8
+};
+
+int returnElement(int temp)
+{
+  int nbits = jpeg_nbits_table[temp];
+  return nbits;
+}

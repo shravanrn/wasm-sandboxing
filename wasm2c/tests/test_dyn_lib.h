@@ -12,6 +12,23 @@ struct testStruct
 	int (*fieldFnPtr)(unsigned, const char*, unsigned[1]);
 };
 
+struct testStruct2
+{
+	void* ptr_list[2];
+};
+
+struct testStruct3
+{
+	uint32_t val;
+	void* ptr;
+};
+
+struct testStruct4
+{
+	void* ptr_list[2];
+	void* ptr;
+};
+
 unsigned long simpleAddNoPrintTest(unsigned long a, unsigned long b);
 int simpleAddTest(int a, int b);
 size_t simpleStrLenTest(const char* str);
@@ -21,10 +38,6 @@ double simpleDoubleAddTest(const double a, const double b);
 unsigned long simpleLongAddTest(unsigned long a, unsigned long b);
 struct testStruct simpleTestStructVal();
 void* simpleNullTest(void* shouldBeNull);
-
-uint32_t test32(uint32_t a);
-uint64_t test64(uint64_t a);
-float testFloat(float a);
-double testDouble(double a);
-size_t testLongSize();
-size_t testPtrSize();
+unsigned long getOffset();
+unsigned long getStructVal(struct testStruct4* p);
+int returnElement(int temp);
