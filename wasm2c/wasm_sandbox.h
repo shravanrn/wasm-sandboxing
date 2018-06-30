@@ -123,9 +123,9 @@ private:
 		return arg;
 	}
 
-	uint32_t serializeArg(std::vector<void*>& allocatedPointers, WasmSandboxCallback arg)
+	uint32_t serializeArg(std::vector<void*>& allocatedPointers, WasmSandboxCallback* arg)
 	{
-		return arg.callbackSlot;
+		return arg->callbackSlot;
 	}
 
 	template<typename T, typename std::enable_if<
@@ -316,7 +316,7 @@ private:
 		}
 	}
 
-	WasmSandboxCallback registerCallbackImpl(void(*callback)(), void(*callbackStub)(), std::vector<wasm_rt_type_t> params, std::vector<wasm_rt_type_t> results);
+	WasmSandboxCallback* registerCallbackImpl(void(*callback)(), void(*callbackStub)(), std::vector<wasm_rt_type_t> params, std::vector<wasm_rt_type_t> results);
 
 	template <typename... Types>
 	struct invokeCallbackTargetHelper {};
@@ -360,7 +360,8 @@ private:
 	}
 
 	template<typename TRet, typename... TArgs>
-	wasm_return_type<TRet> callbackStubImpl(wasm_return_type<TArgs>... args)
+	typename std::enable_if<!std::is_void<TRet>::value,
+	wasm_return_type<TRet>>::type callbackStubImpl(wasm_return_type<TArgs>... args)
 	{
 		std::vector<void*> allocatedPointers;
 		using TargetFuncType = TRet(*)(TArgs...);
@@ -379,6 +380,27 @@ private:
 		);
 		TRet retConv = serializeArg(allocatedPointers, ret);
 		return retConv;
+	}
+
+	template<typename TRet, typename... TArgs>
+	typename std::enable_if<std::is_void<TRet>::value,
+	wasm_return_type<TRet>>::type callbackStubImpl(wasm_return_type<TArgs>... args)
+	{
+		std::vector<void*> allocatedPointers;
+		using TargetFuncType = TRet(*)(TArgs...);
+		TargetFuncType convFuncPtr;
+		uint32_t callbackSlot = wasm_get_current_indirect_call_num();
+
+		{
+			std::lock_guard<std::mutex> lockGuard (registeredCallbackLock);
+			convFuncPtr = (TargetFuncType) registerCallbackMap[callbackSlot];
+		}
+
+		invokeCallbackTarget(convFuncPtr, 
+			invokeCallbackTargetHelper<wasm_return_type<TArgs>...>(),
+			invokeCallbackTargetHelper<TArgs...>(),
+			args...
+		);
 	}
 
 	template<typename TRet, typename... TArgs>
@@ -410,11 +432,25 @@ public:
 		}
 	}
 
+	template<typename TRet, typename std::enable_if<std::is_void<TRet>::value>::type* = nullptr>
+	std::vector<wasm_rt_type_t> getCallbackReturnWasmVec()
+	{
+		std::vector<wasm_rt_type_t> ret;
+		return ret;
+	}
+
+	template<typename TRet, typename std::enable_if<!std::is_void<TRet>::value>::type* = nullptr>
+	std::vector<wasm_rt_type_t> getCallbackReturnWasmVec()
+	{
+		std::vector<wasm_rt_type_t> ret{ getWasmType<TRet>()};
+		return ret;
+	}
+
 	template<typename TRet, typename... TArgs>
-	WasmSandboxCallback registerCallback(TRet(*callback)(TArgs...))
+	WasmSandboxCallback* registerCallback(TRet(*callback)(TArgs...))
 	{
 		std::vector<wasm_rt_type_t> params { getWasmType<TArgs>()...};
-		std::vector<wasm_rt_type_t> returns { getWasmType<TRet>()};
+		std::vector<wasm_rt_type_t> returns = getCallbackReturnWasmVec<TRet>();
 		using voidVoidType = void(*)();
 
 		auto callbackStubRef = callbackStub<TRet, TArgs...>; 
@@ -422,7 +458,7 @@ public:
 		return ret;
 	}
 
-	void unregisterCallback(WasmSandboxCallback callback);
+	void unregisterCallback(WasmSandboxCallback* callback);
 
 	void* getUnsandboxedPointer(const void* p);
 	void* getSandboxedPointer(const void* p);

@@ -81,7 +81,7 @@ void* WasmSandbox::symbolLookup(const char* name)
 	return *symbolAddr;
 }
 
-WasmSandboxCallback WasmSandbox::registerCallbackImpl(void(*callback)(), void(*callbackStub)(), std::vector<wasm_rt_type_t> params, std::vector<wasm_rt_type_t> results)
+WasmSandboxCallback* WasmSandbox::registerCallbackImpl(void(*callback)(), void(*callbackStub)(), std::vector<wasm_rt_type_t> params, std::vector<wasm_rt_type_t> results)
 {
 	uint32_t func_type = wasm_rt_register_func_type_with_lists(&params, &results);
 	wasm_rt_anyfunc_t func = (wasm_rt_anyfunc_t)(void*)callbackStub;
@@ -92,21 +92,24 @@ WasmSandboxCallback WasmSandbox::registerCallbackImpl(void(*callback)(), void(*c
 		registerCallbackMap[callbackSlot] = (void*) callback;
 	}
 
-	WasmSandboxCallback ret;
-	ret.callbackSlot = callbackSlot;
-	ret.originalCallback = (uintptr_t) callback;
-	ret.callbackStub = (uintptr_t) callbackStub;
+	WasmSandboxCallback* ret = new WasmSandboxCallback();
+	ret->callbackSlot = callbackSlot;
+	ret->originalCallback = (uintptr_t) callback;
+	ret->callbackStub = (uintptr_t) callbackStub;
 	return ret;
 }
 
-void WasmSandbox::unregisterCallback(WasmSandboxCallback callback)
+void WasmSandbox::unregisterCallback(WasmSandboxCallback* callback)
 {
+	if(!callback) {	return;	}
+
 	{
 		std::lock_guard<std::mutex> lockGuard (registeredCallbackLock);
-		registerCallbackMap.erase(callback.callbackSlot);
+		registerCallbackMap.erase(callback->callbackSlot);
 	}
 
-	wasm_ret_unregister_func(callback.callbackSlot);
+	wasm_ret_unregister_func(callback->callbackSlot);
+	delete callback;
 }
 
 void* WasmSandbox::getUnsandboxedPointer(const void* p)

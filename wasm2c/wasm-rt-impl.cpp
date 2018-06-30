@@ -85,6 +85,7 @@ uint32_t (*Z_envZ__emscripten_memcpy_bigZ_iiii)(uint32_t, uint32_t, uint32_t);
 void (*Z_envZ_nullFunc_XZ_vi)(uint32_t);
 void (*Z_envZ_nullFunc_iiZ_vi)(uint32_t);
 void (*Z_envZ_nullFunc_iiiiZ_vi)(uint32_t);
+uint32_t (*Z_envZ_sbrkZ_ii)(uint32_t);
 uint32_t (*Z_envZ_sbrkZ_ij)(uint64_t);
 void (*Z_envZ_exitZ_vi)(uint32_t);
 uint32_t (*Z_envZ_getenvZ_ii)(uint32_t);
@@ -204,6 +205,10 @@ uint32_t sbrk_impl(uint64_t increment64) {
   return oldDynamicTop;
 }
 
+uint32_t sbrk_impl_wrap(uint32_t increment) {
+  return sbrk_impl(increment);
+}
+
 void getErrLocation()
 {
   errno_location = _E__errno_location;
@@ -255,6 +260,7 @@ void wasm_init_module()
   Z_envZ_nullFunc_XZ_vi = nullFunc_X;
   Z_envZ_nullFunc_iiZ_vi = nullFunc_ii;
   Z_envZ_nullFunc_iiiiZ_vi = nullFunc_iiii;
+  Z_envZ_sbrkZ_ii = sbrk_impl_wrap;
   Z_envZ_sbrkZ_ij = sbrk_impl;
   Z_envZ_exitZ_vi = (decltype(Z_envZ_exitZ_vi))exit;
   Z_envZ_getenvZ_ii = getenv_impl;
