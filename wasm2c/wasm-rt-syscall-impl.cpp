@@ -105,6 +105,14 @@ DEFINE_STORE(i64_store16, u16, u64);
 DEFINE_STORE(i64_store32, u32, u64);
 
 struct iovec_custom { char *iov_base; size_t iov_len; };
+struct iovec_custom_32 { unsigned int iov_base; unsigned int iov_len; };
+
+static uint32_t getArg32_32(uint32_t& args)
+{
+	uint32_t ret = i32_load(Z_envZ_memory, args);
+	args += 4;
+	return ret;
+}
 
 static uint32_t getArg32(uint32_t& args)
 {
@@ -120,8 +128,9 @@ static uint64_t getArg64(uint32_t& args)
 	return ret;
 }
 
-static uintptr_t getUnsandboxedPointer(uintptr_t arg, size_t size)
+static uintptr_t getUnsandboxedPointer(uintptr_t arg64, size_t size)
 {
+	uintptr_t arg = arg64 & 0xFFFFFFFF;
 	if (UNLIKELY(arg > Z_envZ_memory->size))
 	{
 		TRAP(OOB);
@@ -138,7 +147,39 @@ static uintptr_t getUnsandboxedPointer(uintptr_t arg, size_t size)
 
 uint32_t sys_writev_wrap(uint32_t syscallnum, uint32_t args)
 {
-	return sys_writev(syscallnum, args);
+	uint32_t expectedSyscallNum = 146;
+	if(syscallnum != expectedSyscallNum)
+	{
+		printf("Syscall number mismatch %d, %d", syscallnum, expectedSyscallNum);
+		exit(1);
+	}
+
+	uint32_t stream = getArg32_32(args);
+	uintptr_t sandboxed_iov = (uintptr_t)getArg32_32(args);
+	uint32_t iovcnt = getArg32_32(args);
+
+	if(stream != 1)
+	{
+		printf("Syscall %d. Expected descriptor 1", expectedSyscallNum);
+		exit(1);
+	}
+
+	struct iovec_custom_32* iov = (struct iovec_custom_32*) getUnsandboxedPointer(sandboxed_iov, iovcnt * sizeof(struct iovec_custom_32));
+	uint32_t ret = 0;
+
+	for (uint32_t i = 0; i < iovcnt; i++) {
+		struct iovec_custom_32* curr_iov = &(iov[i]);
+
+		size_t len = curr_iov->iov_len;
+		char* iov_base = (char*) getUnsandboxedPointer((uintptr_t) curr_iov->iov_base, len);
+
+		for (size_t j = 0; j < len; j++) {
+			putchar(iov_base[j]);
+		}
+		ret += len;
+	}
+
+	return ret;
 }
 
 uint64_t sys_writev(uint32_t syscallnum, uint32_t args)

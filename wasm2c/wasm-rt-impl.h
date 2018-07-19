@@ -29,6 +29,7 @@ extern "C" {
 jmp_buf* wasm_get_setjmp_buff();
 uint32_t wasm_rt_register_func(wasm_rt_anyfunc_t func, uint32_t funcType);
 void wasm_ret_unregister_func(uint32_t slotNumber);
+void* wasm_rt_get_registered_func(uint32_t slotNumber);
 uint32_t wasm_rt_register_func_type_with_lists(void* params, void* results);
 void wasm_rt_allocate_table_real(wasm_rt_table_t* table, uint32_t elements, uint32_t max_elements);
 uint32_t wasm_is_LLVM_backend();

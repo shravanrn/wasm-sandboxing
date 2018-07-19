@@ -55,6 +55,9 @@ WasmSandbox* WasmSandbox::createSandbox(const char* path)
 	using unregisterFuncType = void (*)(uint32_t);
 	getSymbol(ret->wasm_ret_unregister_func, unregisterFuncType, wasm_ret_unregister_func);
 
+	using getRegisteredFuncType = void* (*)(uint32_t);
+	getSymbol(ret->wasm_rt_get_registered_func, getRegisteredFuncType, wasm_rt_get_registered_func);
+
 	using getCurrentIndirectType = uint32_t (*)();
 	getSymbol(ret->wasm_get_current_indirect_call_num, getCurrentIndirectType, wasm_get_current_indirect_call_num);
 
@@ -112,11 +115,17 @@ void WasmSandbox::unregisterCallback(WasmSandboxCallback* callback)
 	delete callback;
 }
 
+void* WasmSandbox::getUnsandboxedFuncPointer(const void* p)
+{
+	uint32_t slotNumber = (uintptr_t) p;
+	return wasm_rt_get_registered_func(slotNumber);
+}
+
 void* WasmSandbox::getUnsandboxedPointer(const void* p)
 {
 	#if defined(_M_X64) || defined(__x86_64__)
 
-		uintptr_t pVal = ((uintptr_t) p);
+		uintptr_t pVal = ((uintptr_t) p) & 0xFFFFFFFF;
 		if(pVal == 0)
 		{
 			return nullptr;

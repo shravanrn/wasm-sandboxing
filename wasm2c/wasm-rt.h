@@ -95,6 +95,7 @@ void wasm_init_module();
 void wasm_rt_trap(wasm_rt_trap_t) __attribute__((noreturn));
 uint32_t wasm_rt_register_func_type(uint32_t param_count, uint32_t result_count, ...);
 void wasm_rt_allocate_table(wasm_rt_table_t* table, uint32_t elements, uint32_t max_elements);
+uint32_t wasm_rt_grow_memory(wasm_rt_memory_t*, uint32_t pages);
 
 /** Current call stack depth. */
 extern 

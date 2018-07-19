@@ -150,8 +150,41 @@ unsigned char jpeg_nbits_table[] = {
    8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8
 };
 
+unsigned char * returnAddr()
+{
+  return jpeg_nbits_table;
+}
+
+
 int returnElement(int temp)
 {
   int nbits = jpeg_nbits_table[temp];
   return nbits;
+}
+
+
+void mallocTest()
+{
+    // printf("Malloc 1\n");
+	// void* p_13_16 = malloc(5151);
+	// printf("Malloc 2\n");
+	// void* p_14_16 = malloc(5095);
+	// printf("Malloc 3\n");
+	// void* p_16_16 = malloc(5095);
+	// printf("Malloc 5\n");
+	// void* p_18_ = malloc(62219);
+	void* m_5388000 = malloc(632);
+	((char*)m_5388000)[520 + 4*sizeof(void*)] = (uintptr_t)2;
+	void* m_5420560 = malloc(991);
+	void* m_5421568 = malloc(409920);
+	free(m_5420560);
+	free(m_5388000);
+	void* m49_5388000 = malloc(520);
+	void* functionmca_failed = malloc(168);
+	printf("Malloc Done\n");
+}
+
+void* mallocWrap(size_t size)
+{
+	return malloc(size);
 }

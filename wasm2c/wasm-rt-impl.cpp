@@ -148,7 +148,7 @@ void nullFunc_iiii(uint32_t param)
 void setErrNo(uint32_t value)
 {
   uint32_t loc = errno_location();
-  Z_envZ_memory->data[loc] = value;
+  *((uint32_t*)&(Z_envZ_memory->data[loc])) = value;
 }
 
 uint32_t enlargeMemory() 
@@ -182,21 +182,21 @@ void unlockImpl(uint32_t lockId)
 uint32_t sbrk_impl(uint64_t increment64) {
 
   int32_t increment = increment64; //clear top bits
-  int32_t oldDynamicTop = Z_envZ_memory->data[*Z_envZ_DYNAMICTOP_PTRZ_i];
+  int32_t oldDynamicTop = *((uint32_t*)&(Z_envZ_memory->data[*Z_envZ_DYNAMICTOP_PTRZ_i]));
   int32_t newDynamicTop = oldDynamicTop + increment;
 
   if ((increment > 0 && newDynamicTop < oldDynamicTop) // Detect and fail if we would wrap around signed 32-bit int.
     || newDynamicTop < 0) { // Also underflow, sbrk() should be able to be used to subtract.
     return abortOnCannotGrowMemoryCalled();
-    setErrNo(12);
-    return -1;
+    // setErrNo(12);
+    // return -1;
   }
 
-  Z_envZ_memory->data[*Z_envZ_DYNAMICTOP_PTRZ_i] = newDynamicTop;
+  *((uint32_t*)&(Z_envZ_memory->data[*Z_envZ_DYNAMICTOP_PTRZ_i])) = newDynamicTop;
   int32_t totalMemory = getTotalMemory();
   if (newDynamicTop > totalMemory) {
     if (enlargeMemory() == 0) {
-      Z_envZ_memory->data[*Z_envZ_DYNAMICTOP_PTRZ_i] = oldDynamicTop;
+      *((uint32_t*)&(Z_envZ_memory->data[*Z_envZ_DYNAMICTOP_PTRZ_i])) = oldDynamicTop;
       setErrNo(12);
       return -1;
     }
@@ -226,7 +226,7 @@ void getErrLocation()
 void buildEnvironment(uint32_t ptr)
 {
   //for now we don't support environments
-  Z_envZ_memory->data[ptr] = 0;
+  *((uint32_t*)&(Z_envZ_memory->data[ptr])) = 0;
 }
 
 uint32_t getenv_impl(uint32_t name)
@@ -241,7 +241,58 @@ uint32_t wasm_is_LLVM_backend()
   return _E__errno_location != 0;
 }
 
-#define ALIGN4(val) ((val) + 3) & (-4)
+uint32_t STACK_ALIGN = 16;
+
+static uint32_t staticAlloc(uint32_t* STATICTOP, uint32_t size) {
+  uint32_t ret = *STATICTOP;
+  *STATICTOP = (*STATICTOP + size + 15) & -16;
+  return ret;
+}
+
+static uint32_t alignMemory(uint32_t size) {
+  uint32_t ret = ((uint32_t)ceil(size / STACK_ALIGN)) * STACK_ALIGN;
+  return ret;
+}
+
+void (*_EstackRestore)(uint32_t);
+uint32_t (*_EstackSave)(void);
+
+void wasm_set_constants()
+{
+  initModuleSpecificConstants();
+  uint32_t TOTAL_STACK = 5242880;
+  uint32_t GLOBAL_BASE = 1024;
+  uint32_t STATIC_BASE = GLOBAL_BASE;
+  uint32_t STATICTOP = STATIC_BASE + *STATIC_BUMP;
+  uint32_t tempDoublePtr = STATICTOP; STATICTOP += 16;
+  uint32_t DYNAMICTOP_PTR = staticAlloc(&STATICTOP, 4);
+  uint32_t STACK_BASE, STACKTOP;
+  STACK_BASE = STACKTOP = alignMemory(STATICTOP);
+  uint32_t STACK_MAX = STACK_BASE + TOTAL_STACK;
+  uint32_t DYNAMIC_BASE = alignMemory(STACK_MAX);
+  uint32_t* dynamicBaseLoc = (uint32_t*)(&(Z_envZ_memory->data[DYNAMICTOP_PTR]));
+  *dynamicBaseLoc = DYNAMIC_BASE;
+  STACKTOP = STACK_BASE + TOTAL_STACK;
+  STACK_MAX = STACK_BASE;
+
+  Z_envZ_STACKTOPZ_i = (uint32_t*) malloc(sizeof(uint32_t));
+  Z_envZ_STACK_MAXZ_i = (uint32_t*) malloc(sizeof(uint32_t));
+  Z_envZ_DYNAMICTOP_PTRZ_i = (uint32_t*) malloc(sizeof(uint32_t));
+  Z_envZ_tempDoublePtrZ_i = (uint32_t*) malloc(sizeof(uint32_t));
+
+  *Z_envZ_STACKTOPZ_i = STACKTOP;
+  *Z_envZ_STACK_MAXZ_i = STACK_MAX;
+  *Z_envZ_DYNAMICTOP_PTRZ_i = DYNAMICTOP_PTR;
+  *Z_envZ_tempDoublePtrZ_i = tempDoublePtr;
+
+  uint32_t stack = _EstackSave();
+  //wasm-ld loader sets its own stack location, while wasm2s does not
+  //to support both cases, set stack only if it isnt already set
+  if(!stack)
+  {
+    _EstackRestore(STACKTOP);
+  }
+}
 
 void wasm_rt_allocate_memory(wasm_rt_memory_t* memory, uint32_t initial_pages, uint32_t max_pages);
 
@@ -282,22 +333,6 @@ void wasm_init_module()
   memset(Z_envZ_table, 0, sizeof(wasm_rt_table_t));
   wasm_rt_allocate_table_real(Z_envZ_table, FUNC_TABLE_SIZE, FUNC_TABLE_SIZE);
 
-  initModuleSpecificConstants();
-
-  Z_envZ_STACKTOPZ_i = (uint32_t*) malloc(sizeof(uint32_t));
-  Z_envZ_STACK_MAXZ_i = (uint32_t*) malloc(sizeof(uint32_t));
-  Z_envZ_DYNAMICTOP_PTRZ_i = (uint32_t*) malloc(sizeof(uint32_t));
-  Z_envZ_tempDoublePtrZ_i = (uint32_t*) malloc(sizeof(uint32_t));
-
-  uint32_t staticTop = *Z_envZ_memoryBaseZ_i + *STATIC_BUMP;
-  *Z_envZ_tempDoublePtrZ_i = staticTop;
-  staticTop += 16;
-
-  *Z_envZ_DYNAMICTOP_PTRZ_i = staticTop;
-  *Z_envZ_STACKTOPZ_i = ALIGN4(staticTop + 1);
-  uint32_t totalStack = 5242880;
-  *Z_envZ_STACK_MAXZ_i = *Z_envZ_memoryBaseZ_i + totalStack;
-
   Z_globalZ_NaNZ_d = (double*) malloc(sizeof(double));
   Z_globalZ_InfinityZ_d = (double*) malloc(sizeof(double));
 
@@ -310,12 +345,14 @@ void wasm_init_module()
   initSyscalls();
 
   init();
+  
+  wasm_set_constants();
 
   getErrLocation();
 
   if(wasm_is_LLVM_backend())
   {
-    uint32_t* loc0 = (uint32_t*)(&(Z_envZ_memory->data[*Z_envZ_memoryBaseZ_i]));
+    uint32_t* loc0 = (uint32_t*)(&(Z_envZ_memory->data[0/**Z_envZ_memoryBaseZ_i*/]));
     *loc0 = 0x63736d65;
   }
 }
@@ -472,7 +509,7 @@ uint32_t wasm_rt_register_func(wasm_rt_anyfunc_t func, uint32_t funcType)
 {
   std::lock_guard<std::mutex> lock(func_tables_mutex);
 
-  for(uint32_t i = 0; i < FUNC_TABLE_SIZE; i++)
+  for(uint32_t i = 1; i < FUNC_TABLE_SIZE; i++)
   {
     //find empty slot
     if(!Z_envZ_table->data[i].func)
@@ -496,6 +533,18 @@ void wasm_ret_unregister_func(uint32_t slotNumber)
     Z_envZ_table->data[slotNumber].func = 0;
     Z_envZ_table->data[slotNumber].func_type = 0;
   }
+}
+
+void* wasm_rt_get_registered_func(uint32_t slotNumber)
+{
+  std::lock_guard<std::mutex> lock(func_tables_mutex);
+
+  if(slotNumber < FUNC_TABLE_SIZE)
+  {
+    return (void*) Z_envZ_table->data[slotNumber].func;
+  }
+
+  return nullptr;
 }
 
 void wasm_rt_allocate_memory(wasm_rt_memory_t* memory,
@@ -532,4 +581,10 @@ void wasm_rt_allocate_table(wasm_rt_table_t* table,
                             uint32_t max_elements) {
   //make sure the internal function table is the same as the external function table
   *table = *Z_envZ_table;
+}
+
+uint32_t wasm_rt_grow_memory(wasm_rt_memory_t*, uint32_t pages)
+{
+  printf("Grow memory not supported!\n");
+  exit(1);
 }

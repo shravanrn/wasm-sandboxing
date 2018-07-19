@@ -24,27 +24,30 @@ wabt_bin:
 wasm_sandbox_lib:
 	cd ../wasm2c/ && g++ $(CFLAGS) -fPIC -shared wasm_sandbox.cpp -o ../bin/libwasm_sandbox.a
 
+WASM_SANDBOX_DIR=$(shell realpath ../../wasm-sandboxing)
+CURRPATH=$(shell realpath .)
+
+# 1 - .a input lib file
+# 2 - .js output file
+define convert_to_wasm =
+	emcc $(1) -O0 -s WASM=1 -s TOTAL_MEMORY=2147418112 -s ALLOW_MEMORY_GROWTH=0 -s LEGALIZE_JS_FFI=0 -s EMULATED_FUNCTION_POINTERS=1 -s "EXPORTED_FUNCTIONS=[$$($(WASM_SANDBOX_DIR)/builds/getLLVMFileFunctions $(1)), '_malloc', '_free']" -o $(2) && \
+	$(WASM_SANDBOX_DIR)/bin/wasm2wat --inline-exports --inline-imports -f $(patsubst %.js,%.wasm,$(2)) -o $(patsubst %.js,%.wat,$(2)) && \
+	$(WASM_SANDBOX_DIR)/bin/wasm2c $(patsubst %.js,%.wasm,$(2)) -o $(patsubst %.js,%.c,$(2)) && \
+	$(WASM_SANDBOX_DIR)/builds/generateModuleSpecificConstants $(2) > $(patsubst %.js,%_rt.cpp,$(2)) && \
+	gcc $(CFLAGS) -fPIC -I $(WASM_SANDBOX_DIR)/wasm2c -c $(patsubst %.js,%.c,$(2)) -o $(patsubst %.js,%.o,$(2)) && \
+	g++ $(CFLAGS) -fPIC -std=c++11 $(WASM_SANDBOX_DIR)/wasm2c/wasm-rt-impl.cpp $(WASM_SANDBOX_DIR)/wasm2c/wasm-rt-syscall-impl.cpp $(patsubst %.js,%_rt.cpp,$(2)) $(patsubst %.js,%.o,$(2)) -I $(WASM_SANDBOX_DIR)/wasm2c -fPIC -shared -o $(patsubst %.js,%.so,$(2))
+endef
+
 .ONESHELL:
 SHELL=/bin/bash
 build64: wabt_bin wasm_sandbox_lib
 	source ../../emsdk/emsdk_env.sh
+	# export EMCC_EXPERIMENTAL_USE_LLD=0
 	mkdir -p ../wasm2c/tests/out
 	cd ../wasm2c/tests/out
-	#Building with a newly installed compiler does some setup like building portions of libc during the first build 
-	#This new setup fails if we mix it with SIDE_MODULE flag
-	#So compile a basic program first
-	export EMCC_EXPERIMENTAL_USE_LLD=0
-	emcc ../hello_world.c -O0 -s WASM=1 -s EMULATED_FUNCTION_POINTERS=1 -o dummy.js || exit 1
-	emcc ../test_dyn_lib.c $(EMSCRIPTEN_CFLAGS) -s WASM=1 -s SIDE_MODULE=1 -s EMULATED_FUNCTION_POINTERS=1 -o test_dyn_lib_my.wasm  || exit 1
-	../../../bin/wasm2wat --inline-exports --inline-imports -f test_dyn_lib_my.wasm -o test_dyn_lib_my.wat  || exit 1
-	# There is a tool failure if we try setting the total memory to 4GB (causing a u32 overflow) and 
-	# a runtime failure of signed vs unsigned if we set this to more that 2GB. So we set it to (2GB - 64KB)
-	bash -c 'emcc ../test_dyn_lib.c $(EMSCRIPTEN_CFLAGS) -s WASM=1 -s TOTAL_MEMORY=2147418112 -s ALLOW_MEMORY_GROWTH=0 -s LEGALIZE_JS_FFI=0 -s EMULATED_FUNCTION_POINTERS=1 -s "EXPORTED_FUNCTIONS=[$$(../../../builds/getWastFunctions ./test_dyn_lib_my.wat), '_malloc', '_free']" -o wasm_test_dyn_lib.js' || exit 1
-	../../../bin/wasm2wat --inline-exports --inline-imports -f wasm_test_dyn_lib.wasm -o wasm_test_dyn_lib.wat || exit 1
-	../../../bin/wasm2c wasm_test_dyn_lib.wasm -o wasm_test_dyn_lib.c || exit 1
-	../../../builds/generateModuleSpecificConstants wasm_test_dyn_lib.js > wasm_test_dyn_lib_rt.cpp || exit 1
-	g++ $(CFLAGS) ../../wasm-rt-impl.cpp ../../wasm-rt-syscall-impl.cpp wasm_test_dyn_lib_rt.cpp wasm_test_dyn_lib.c -I ../../ -fPIC -shared -o libwasm_test_dyn_lib.so || exit 1
-	g++ $(CFLAGS) ../test_app.cpp ../../../bin/libwasm_sandbox.a -o test_app -ldl || exit 1
+	emcc ../test_dyn_lib.c $(EMSCRIPTEN_CFLAGS) -c -o test_dyn_lib.o
+	$(call convert_to_wasm,$(join $(shell realpath $(CURRPATH)/../wasm2c/tests/out), /test_dyn_lib.o),$(join $(shell realpath $(CURRPATH)/../wasm2c/tests/out), /libwasm_test_dyn_lib.js))
+	g++ $(CFLAGS) ../test_app.cpp ../../../bin/libwasm_sandbox.a -o test_app -ldl
 
 run64:
 	cd ../wasm2c/tests/out && ./test_app

@@ -90,6 +90,7 @@ private:
 	uint32_t (*wasm_rt_register_func_type_with_lists)(std::vector<wasm_rt_type_t> *, std::vector<wasm_rt_type_t> *);
 	uint32_t (*wasm_rt_register_func)(void(*func)(), uint32_t funcType);
 	void (*wasm_ret_unregister_func)(uint32_t slotNumber);
+	void* (*wasm_rt_get_registered_func)(uint32_t slotNumber);
 	uint32_t (*wasm_get_current_indirect_call_num)();
 	void* wasm_memory;
 	size_t wasm_memory_size;
@@ -459,6 +460,7 @@ public:
 	}
 
 	void unregisterCallback(WasmSandboxCallback* callback);
+	void* getUnsandboxedFuncPointer(const void* p);
 
 	void* getUnsandboxedPointer(const void* p);
 	void* getSandboxedPointer(const void* p);
