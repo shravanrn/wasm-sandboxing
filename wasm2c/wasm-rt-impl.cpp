@@ -246,6 +246,7 @@ uint32_t STACK_ALIGN = 16;
 static uint32_t staticAlloc(uint32_t* STATICTOP, uint32_t size) {
   uint32_t ret = *STATICTOP;
   *STATICTOP = (*STATICTOP + size + 15) & -16;
+  assert((*STATICTOP < getTotalMemory()) && "not enough memory for static allocation - increase TOTAL_MEMORY");
   return ret;
 }
 
@@ -257,7 +258,7 @@ static uint32_t alignMemory(uint32_t size) {
 void (*_EstackRestore)(uint32_t);
 uint32_t (*_EstackSave)(void);
 
-void wasm_set_constants()
+static void wasm_set_constants()
 {
   initModuleSpecificConstants();
   uint32_t TOTAL_STACK = 5242880;
@@ -265,6 +266,7 @@ void wasm_set_constants()
   uint32_t STATIC_BASE = GLOBAL_BASE;
   uint32_t STATICTOP = STATIC_BASE + *STATIC_BUMP;
   uint32_t tempDoublePtr = STATICTOP; STATICTOP += 16;
+  assert(tempDoublePtr % 8 == 0);
   uint32_t DYNAMICTOP_PTR = staticAlloc(&STATICTOP, 4);
   uint32_t STACK_BASE, STACKTOP;
   STACK_BASE = STACKTOP = alignMemory(STATICTOP);
@@ -272,8 +274,10 @@ void wasm_set_constants()
   uint32_t DYNAMIC_BASE = alignMemory(STACK_MAX);
   uint32_t* dynamicBaseLoc = (uint32_t*)(&(Z_envZ_memory->data[DYNAMICTOP_PTR]));
   *dynamicBaseLoc = DYNAMIC_BASE;
-  STACKTOP = STACK_BASE + TOTAL_STACK;
-  STACK_MAX = STACK_BASE;
+  assert(DYNAMIC_BASE < getTotalMemory() && "TOTAL_MEMORY not big enough for stack");
+
+  // STACKTOP = STACK_BASE + TOTAL_STACK;
+  // STACK_MAX = STACK_BASE;
 
   Z_envZ_STACKTOPZ_i = (uint32_t*) malloc(sizeof(uint32_t));
   Z_envZ_STACK_MAXZ_i = (uint32_t*) malloc(sizeof(uint32_t));
@@ -284,13 +288,16 @@ void wasm_set_constants()
   *Z_envZ_STACK_MAXZ_i = STACK_MAX;
   *Z_envZ_DYNAMICTOP_PTRZ_i = DYNAMICTOP_PTR;
   *Z_envZ_tempDoublePtrZ_i = tempDoublePtr;
+}
 
+static void wasm_set_stack()
+{
   uint32_t stack = _EstackSave();
   //wasm-ld loader sets its own stack location, while wasm2s does not
   //to support both cases, set stack only if it isnt already set
   if(!stack)
   {
-    _EstackRestore(STACKTOP);
+    _EstackRestore(*Z_envZ_STACKTOPZ_i);
   }
 }
 
@@ -344,9 +351,11 @@ void wasm_init_module()
 
   initSyscalls();
 
+  wasm_set_constants();
+
   init();
   
-  wasm_set_constants();
+  wasm_set_stack();
 
   getErrLocation();
 

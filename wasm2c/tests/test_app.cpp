@@ -230,27 +230,6 @@ int main(int argc, char** argv) {
 		exit(1);
 	}
 
-	// printf("Loop?: ");
-	// putchar(' ');
-	// int loop = 0;
-	// scanf("%d", &loop);
-	// if(loop)
-	// {
-	// 	printf("Malloc 1\n");
-	// 	auto p_13_16 = sandbox->mallocInSandbox(5151);
-	// 	printf("Malloc 2\n");
-	// 	auto p_14_16 = sandbox->mallocInSandbox(5095);
-	// 	// auto p_15_5184 = sandbox->mallocInSandbox(2591);
-	// 	printf("Malloc 3\n");
-	// 	auto p_16_16 = sandbox->mallocInSandbox(5095);
-	// 	// printf("Malloc 4\n");
-	// 	// auto p_17_ = sandbox->mallocInSandbox(2591);
-	// 	printf("Malloc 5\n");
-	// 	auto p_18_ = sandbox->mallocInSandbox(62219);
-	// 	printf("Malloc Done\n");
-	// 	// exit(0);
-	// }
-
 	using fnType = void (*)(void);
 	fnType fn = (fnType) sandbox->symbolLookup("mallocTest");
 	invokeSimpleMallocTest(sandbox, fn);
@@ -316,11 +295,11 @@ int main(int argc, char** argv) {
 		exit(1);	
 	}
 
-	if(!invokeSimpleOffsetTest(sandbox))
-	{
-		printf("Test 11: Failed\n");
-		exit(1);	
-	}
+	// if(!invokeSimpleOffsetTest(sandbox))
+	// {
+	// 	printf("Test 11: Failed\n");
+	// 	exit(1);	
+	// }
 
 	if(!invokeSimpleStructValTest(sandbox))
 	{
