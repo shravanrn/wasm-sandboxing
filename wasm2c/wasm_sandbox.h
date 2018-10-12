@@ -19,26 +19,27 @@
 
 #endif
 
-//https://stackoverflow.com/questions/6512019/can-we-get-the-type-of-a-lambda-argument
-template<typename Ret, typename... Rest>
-Ret return_argument_helper(Ret(*) (Rest...));
-
-template<typename Ret, typename F, typename... Rest>
-Ret return_argument_helper(Ret(F::*) (Rest...));
-
-template<typename Ret, typename F, typename... Rest>
-Ret return_argument_helper(Ret(F::*) (Rest...) const);
-
-template <typename F>
-decltype(return_argument_helper(&F::operator())) return_argument_helper(F);
-
-template <typename T>
-using return_argument = decltype(return_argument_helper(std::declval<T>()));
 
 class WasmSandbox;
 
 namespace WasmSandboxImpl
 {
+	//https://stackoverflow.com/questions/6512019/can-we-get-the-type-of-a-lambda-argument
+	template<typename Ret, typename... Rest>
+	Ret return_argument_helper(Ret(*) (Rest...));
+
+	template<typename Ret, typename F, typename... Rest>
+	Ret return_argument_helper(Ret(F::*) (Rest...));
+
+	template<typename Ret, typename F, typename... Rest>
+	Ret return_argument_helper(Ret(F::*) (Rest...) const);
+
+	template <typename F>
+	decltype(return_argument_helper(&F::operator())) return_argument_helper(F);
+
+	template <typename T>
+	using return_argument = decltype(return_argument_helper(std::declval<T>()));
+
 	template<typename T>
 	struct wrapper {};
 
@@ -330,7 +331,7 @@ private:
 		class... TArgs,
 		class... TExtraArgs
 	>
-	return_argument<TFunc> invokeCallbackTarget(TFunc targetFunc, 
+	WasmSandboxImpl::return_argument<TFunc> invokeCallbackTarget(TFunc targetFunc, 
 		TSandboxArgsWrapper<TSandboxArgs...> wrap1,
 		TArgsWrapper<TArgs...> wrap2,
 		TExtraArgs... args
@@ -346,7 +347,7 @@ private:
 		class TArg, class... TArgs,
 		class... TExtraArgs
 	>
-	return_argument<TFunc> invokeCallbackTarget(TFunc targetFunc, 
+	WasmSandboxImpl::return_argument<TFunc> invokeCallbackTarget(TFunc targetFunc, 
 		TSandboxArgsWrapper<TSandboxArg, TSandboxArgs...> wrap1,
 		TArgsWrapper<TArg, TArgs...> wrap2,
 		TSandboxArg sandboxArg,
@@ -422,7 +423,7 @@ public:
 	void* symbolLookup(const char* name);
 
 	template<typename T, typename... TArgs>
-	return_argument<T*> invokeFunction(T* fnPtr, TArgs... params)
+	WasmSandboxImpl::return_argument<T*> invokeFunction(T* fnPtr, TArgs... params)
 	{
 		jmp_buf& buff = *wasm_get_setjmp_buff();
 		int trapCode = setjmp(buff);
@@ -430,7 +431,7 @@ public:
 		if(!trapCode)
 		{
 			std::vector<void*> allocatedPointers;
-			return invokeFunctionWithArgs<return_argument<T*>>((void*) fnPtr, allocatedPointers, serializeArg(allocatedPointers, params)...);
+			return invokeFunctionWithArgs<WasmSandboxImpl::return_argument<T*>>((void*) fnPtr, allocatedPointers, serializeArg(allocatedPointers, params)...);
 		}
 		else
 		{
