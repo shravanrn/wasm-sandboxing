@@ -33,19 +33,19 @@ size_t invokeSimpleStrLenTestWithHeapString(WasmSandbox* sandbox, const char* st
 
 //////////////////////////////////////////////////////////////////
 
-int invokeSimpleCallbackTest_callback(unsigned a, const char* b, unsigned c[1])
+int invokeSimpleCallbackTest_callback(void* sandbox, unsigned a, const char* b, unsigned c[1])
 {
 	return a + strlen(b);
 }
 
-int invokeSimpleCallbackTest(WasmSandbox* sandbox, unsigned a, const char* b, int (*callback)(unsigned, const char*, unsigned[1]))
+int invokeSimpleCallbackTest(WasmSandbox* sandbox, unsigned a, const char* b, int (*callback)(void*, unsigned, const char*, unsigned[1]))
 {
 	using fnType = int (*)(unsigned, const char*, CallbackType);
 	fnType fn = (fnType) sandbox->symbolLookup("simpleCallbackTest");
 
 	char* bInSandbox = (char*) sandbox->mallocInSandbox(strlen(b) + 1);
 	strcpy(bInSandbox, b);
-	auto registeredCallback = sandbox->registerCallback(callback);
+	auto registeredCallback = sandbox->registerCallback(callback, (void*)sandbox);
 
 	auto result = sandbox->invokeFunction(fn, a, bInSandbox, registeredCallback);
 	sandbox->freeInSandbox(bInSandbox);

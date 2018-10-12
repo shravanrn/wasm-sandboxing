@@ -96,6 +96,7 @@ private:
 	size_t wasm_memory_size;
 
 	std::map<uint32_t, void*> registerCallbackMap;
+	std::map<uint32_t, void*> callbackStateMap;
 	std::mutex registeredCallbackLock;
 
 	template<typename T, typename std::enable_if<
@@ -317,7 +318,7 @@ private:
 		}
 	}
 
-	WasmSandboxCallback* registerCallbackImpl(void(*callback)(), void(*callbackStub)(), std::vector<wasm_rt_type_t> params, std::vector<wasm_rt_type_t> results);
+	WasmSandboxCallback* registerCallbackImpl(void* state, void(*callback)(), void(*callbackStub)(), std::vector<wasm_rt_type_t> params, std::vector<wasm_rt_type_t> results);
 
 	template <typename... Types>
 	struct invokeCallbackTargetHelper {};
@@ -365,19 +366,22 @@ private:
 	wasm_return_type<TRet>>::type callbackStubImpl(wasm_return_type<TArgs>... args)
 	{
 		std::vector<void*> allocatedPointers;
-		using TargetFuncType = TRet(*)(TArgs...);
+		using TargetFuncType = TRet(*)(void*, TArgs...);
 		TargetFuncType convFuncPtr;
 		uint32_t callbackSlot = wasm_get_current_indirect_call_num();
+		void* state;
 
 		{
 			std::lock_guard<std::mutex> lockGuard (registeredCallbackLock);
 			convFuncPtr = (TargetFuncType) registerCallbackMap[callbackSlot];
+			state = callbackStateMap[callbackSlot];
 		}
 
 		auto ret = invokeCallbackTarget(convFuncPtr, 
 			invokeCallbackTargetHelper<wasm_return_type<TArgs>...>(),
 			invokeCallbackTargetHelper<TArgs...>(),
-			args...
+			args...,
+			state
 		);
 		TRet retConv = serializeArg(allocatedPointers, ret);
 		return retConv;
@@ -388,19 +392,22 @@ private:
 	wasm_return_type<TRet>>::type callbackStubImpl(wasm_return_type<TArgs>... args)
 	{
 		std::vector<void*> allocatedPointers;
-		using TargetFuncType = TRet(*)(TArgs...);
+		using TargetFuncType = TRet(*)(void*, TArgs...);
 		TargetFuncType convFuncPtr;
 		uint32_t callbackSlot = wasm_get_current_indirect_call_num();
+		void* state;
 
 		{
 			std::lock_guard<std::mutex> lockGuard (registeredCallbackLock);
 			convFuncPtr = (TargetFuncType) registerCallbackMap[callbackSlot];
+			state = callbackStateMap[callbackSlot];
 		}
 
 		invokeCallbackTarget(convFuncPtr, 
 			invokeCallbackTargetHelper<wasm_return_type<TArgs>...>(),
 			invokeCallbackTargetHelper<TArgs...>(),
-			args...
+			args...,
+			state
 		);
 	}
 
@@ -448,14 +455,14 @@ public:
 	}
 
 	template<typename TRet, typename... TArgs>
-	WasmSandboxCallback* registerCallback(TRet(*callback)(TArgs...))
+	WasmSandboxCallback* registerCallback(TRet(*callback)(void*, TArgs...), void* state)
 	{
 		std::vector<wasm_rt_type_t> params { getWasmType<TArgs>()...};
 		std::vector<wasm_rt_type_t> returns = getCallbackReturnWasmVec<TRet>();
 		using voidVoidType = void(*)();
 
 		auto callbackStubRef = callbackStub<TRet, TArgs...>; 
-		auto ret = registerCallbackImpl((voidVoidType)(void*)callback, (voidVoidType)(void*)callbackStubRef, params, returns);
+		auto ret = registerCallbackImpl(state, (voidVoidType)(void*)callback, (voidVoidType)(void*)callbackStubRef, params, returns);
 		return ret;
 	}
 
@@ -470,4 +477,11 @@ public:
 
 	void* mallocInSandbox(size_t size);
 	void freeInSandbox(void* ptr);
+
+	size_t getTotalMemory();
+	
+	inline void* getSandboxMemoryBase()
+	{
+		return wasm_memory;
+	}
 };

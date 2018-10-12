@@ -84,7 +84,7 @@ void* WasmSandbox::symbolLookup(const char* name)
 	return *symbolAddr;
 }
 
-WasmSandboxCallback* WasmSandbox::registerCallbackImpl(void(*callback)(), void(*callbackStub)(), std::vector<wasm_rt_type_t> params, std::vector<wasm_rt_type_t> results)
+WasmSandboxCallback* WasmSandbox::registerCallbackImpl(void* state, void(*callback)(), void(*callbackStub)(), std::vector<wasm_rt_type_t> params, std::vector<wasm_rt_type_t> results)
 {
 	uint32_t func_type = wasm_rt_register_func_type_with_lists(&params, &results);
 	wasm_rt_anyfunc_t func = (wasm_rt_anyfunc_t)(void*)callbackStub;
@@ -93,6 +93,7 @@ WasmSandboxCallback* WasmSandbox::registerCallbackImpl(void(*callback)(), void(*
 	{
 		std::lock_guard<std::mutex> lockGuard (registeredCallbackLock);
 		registerCallbackMap[callbackSlot] = (void*) callback;
+		callbackStateMap[callbackSlot] = (void*) state;
 	}
 
 	WasmSandboxCallback* ret = new WasmSandboxCallback();
@@ -109,6 +110,7 @@ void WasmSandbox::unregisterCallback(WasmSandboxCallback* callback)
 	{
 		std::lock_guard<std::mutex> lockGuard (registeredCallbackLock);
 		registerCallbackMap.erase(callback->callbackSlot);
+		callbackStateMap.erase(callback->callbackSlot);
 	}
 
 	wasm_ret_unregister_func(callback->callbackSlot);
@@ -201,4 +203,9 @@ void WasmSandbox::freeInSandbox(void* ptr)
 {
 	uint32_t ret = (uint32_t) (uintptr_t) getSandboxedPointer(ptr);
 	invokeFunction(wasm_free, ret);
+}
+
+size_t WasmSandbox::getTotalMemory()
+{
+	return getTotalMemory();
 }
