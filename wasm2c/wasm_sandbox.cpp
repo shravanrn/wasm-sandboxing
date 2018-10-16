@@ -207,5 +207,5 @@ void WasmSandbox::freeInSandbox(void* ptr)
 
 size_t WasmSandbox::getTotalMemory()
 {
-	return getTotalMemory();
+	return wasm_memory_size;
 }

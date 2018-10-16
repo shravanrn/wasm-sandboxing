@@ -136,7 +136,7 @@ private:
 	>::type* = nullptr>
 	uint32_t serializeArg(std::vector<void*>& allocatedPointers, T arg)
 	{
-		uint32_t ret = (uintptr_t) getSandboxedPointer(arg);
+		uint32_t ret = (uintptr_t) getSandboxedPointer((const void*) arg);
 		return ret;
 	}
 
@@ -422,8 +422,8 @@ public:
 	static WasmSandbox* createSandbox(const char* path);
 	void* symbolLookup(const char* name);
 
-	template<typename T, typename... TArgs>
-	WasmSandboxImpl::return_argument<T*> invokeFunction(T* fnPtr, TArgs... params)
+	template<typename TRet, typename... TFuncArgs, typename... TArgs>
+	TRet invokeFunction(TRet(*fnPtr)(TFuncArgs...), TArgs... params)
 	{
 		jmp_buf& buff = *wasm_get_setjmp_buff();
 		int trapCode = setjmp(buff);
@@ -431,7 +431,7 @@ public:
 		if(!trapCode)
 		{
 			std::vector<void*> allocatedPointers;
-			return invokeFunctionWithArgs<WasmSandboxImpl::return_argument<T*>>((void*) fnPtr, allocatedPointers, serializeArg(allocatedPointers, params)...);
+			return invokeFunctionWithArgs<TRet>((void*) fnPtr, allocatedPointers, serializeArg(allocatedPointers, (TFuncArgs)params)...);
 		}
 		else
 		{
