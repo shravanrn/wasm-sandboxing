@@ -136,7 +136,7 @@ private:
 	>::type* = nullptr>
 	uint32_t serializeArg(std::vector<void*>& allocatedPointers, T arg)
 	{
-		uint32_t ret = (uintptr_t) getSandboxedPointer((const void*) arg);
+		uint32_t ret = (uintptr_t) (const void*) arg;
 		return ret;
 	}
 
