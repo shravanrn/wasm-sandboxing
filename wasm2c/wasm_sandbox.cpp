@@ -61,6 +61,12 @@ WasmSandbox* WasmSandbox::createSandbox(const char* path)
 	using getCurrentIndirectType = uint32_t (*)();
 	getSymbol(ret->wasm_get_current_indirect_call_num, getCurrentIndirectType, wasm_get_current_indirect_call_num);
 
+	using checkStackCookieType = void (*)();
+	getSymbol(ret->checkStackCookie, checkStackCookieType, checkStackCookie);
+
+	using wasmGetHeapBaseType = uint32_t (*)();
+	getSymbol(ret->wasm_get_heap_base, wasmGetHeapBaseType, wasm_get_current_indirect_call_num);
+
 	wasm_rt_memory_t** wasm_memory_st;
 	getSymbol(wasm_memory_st, wasm_rt_memory_t**, Z_envZ_memory);
 	
@@ -196,6 +202,11 @@ int WasmSandbox::isAddressInSandboxMemoryOrNull(const void* p)
 void* WasmSandbox::mallocInSandbox(size_t size)
 {
 	uintptr_t ret = invokeFunction(wasm_malloc, size);
+	if(ret < wasm_get_heap_base())
+	{
+		printf("WasmSandbox::mallocInSandbox returned a value not in the heap\n");
+		abort();
+	}
 	return getUnsandboxedPointer((void*)ret);
 }
 

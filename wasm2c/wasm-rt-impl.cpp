@@ -24,6 +24,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <setjmp.h>
+#include <inttypes.h>
 #include <math.h>
 #include <mutex>
 #include <map>
@@ -103,52 +104,99 @@ ErrNoType errno_location;
 ErrNoType __attribute__((weak)) _E___errno_location = 0;
 ErrNoType __attribute__((weak)) _E__errno_location = 0;
 
+
+#define UNLIKELY(x) __builtin_expect(!!(x), 0)
+#define TRAP(x) (wasm_rt_trap(WASM_RT_TRAP_##x), 0)
+
+#define MEMCHECK(mem, a, t)  \
+  if (UNLIKELY((a) + sizeof(t) > mem->size)) TRAP(OOB)
+
+#define DEFINE_LOAD(name, t1, t2, t3)              \
+  static inline t3 name(wasm_rt_memory_t* mem, uint64_t addr) {   \
+    MEMCHECK(mem, addr, t1);                       \
+    t1 result;                                     \
+    memcpy(&result, &mem->data[addr], sizeof(t1)); \
+    return (t3)(t2)result;                         \
+  }
+
+#define DEFINE_STORE(name, t1, t2)                           \
+  static inline void name(wasm_rt_memory_t* mem, uint64_t addr, t2 value) { \
+    MEMCHECK(mem, addr, t1);                                 \
+    t1 wrapped = (t1)value;                                  \
+    memcpy(&mem->data[addr], &wrapped, sizeof(t1));          \
+  }
+
+DEFINE_LOAD(i32_load, uint32_t, uint32_t, uint32_t);
+DEFINE_STORE(i32_store, uint32_t, uint32_t);
+
+void writeStackCookie() {
+  assert((*Z_envZ_STACK_MAXZ_i & 3) == 0);
+  i32_store(Z_envZ_memory, *Z_envZ_STACK_MAXZ_i - 4, 0x02135467);
+  i32_store(Z_envZ_memory, *Z_envZ_STACK_MAXZ_i - 8, 0x89BACDFE);
+}
+
+void checkStackCookie() {
+  uint32_t c1 = i32_load(Z_envZ_memory, *Z_envZ_STACK_MAXZ_i - 4);
+  uint32_t c2 = i32_load(Z_envZ_memory, *Z_envZ_STACK_MAXZ_i - 8);
+  if (c1 != 0x02135467 || c2 != 0x89BACDFE) {
+    printf("Stack overflow! Stack cookie has been overwritten, expected hex dwords 0x89BACDFE and 0x02135467, but received %d %d",
+      c1, c2);
+      abort();
+  }
+  // Also test the global address 0 for integrity. This check is not compatible with SAFE_SPLIT_MEMORY though, since that mode already tests all address 0 accesses on its own.
+  uint32_t nc = i32_load(Z_envZ_memory, 0);
+  if (nc != 0x63736d65 /* 'emsc' */) {
+    printf("Runtime error: The application has corrupted its heap memory area (address zero)!");
+    abort();
+  }
+}
+
 void abortCalledVoid()
 {
   printf("WASM module called abort\n");
-  exit(1);
+  abort();
 }
 
 void abortCalled(uint32_t param)
 {
   printf("WASM module called abort : %u\n", param);
-  exit(param);
+  abort();
 }
 
 uint32_t abortOnCannotGrowMemoryCalled()
 {
   printf("WASM module called abortOnCannotGrowMemory\n");
-  exit(1);
+  abort();
 }
 
 void abortStackOverflowCalled(uint32_t param)
 {
   printf("WASM module called abortStackOverflow : %u\n", param);
-  exit(param);
+  abort();
 }
 
 void nullFunc_X(uint32_t param)
 {
   printf("Invalid function pointer called with signature 'X': %u", param);
-  exit(param);
+  abort();
 }
 
 void nullFunc_ii(uint32_t param) 
 { 
   printf("Invalid function pointer called with signature 'ii': %u", param);
-  exit(param);
+  abort();
 }
 
 void nullFunc_iiii(uint32_t param) 
 { 
   printf("Invalid function pointer called with signature 'iiii': %u", param);
-  exit(param);
+  abort();
 }
 
 void setErrNo(uint32_t value)
 {
   uint32_t loc = errno_location();
-  *((uint32_t*)&(Z_envZ_memory->data[loc])) = value;
+  i32_store(Z_envZ_memory, loc, value);
 }
 
 uint32_t enlargeMemory() 
@@ -182,7 +230,7 @@ void unlockImpl(uint32_t lockId)
 uint32_t sbrk_impl(uint64_t increment64) {
 
   int32_t increment = increment64; //clear top bits
-  int32_t oldDynamicTop = *((uint32_t*)&(Z_envZ_memory->data[*Z_envZ_DYNAMICTOP_PTRZ_i]));
+  int32_t oldDynamicTop = i32_load(Z_envZ_memory, *Z_envZ_DYNAMICTOP_PTRZ_i);
   int32_t newDynamicTop = oldDynamicTop + increment;
 
   if ((increment > 0 && newDynamicTop < oldDynamicTop) // Detect and fail if we would wrap around signed 32-bit int.
@@ -192,11 +240,11 @@ uint32_t sbrk_impl(uint64_t increment64) {
     // return -1;
   }
 
-  *((uint32_t*)&(Z_envZ_memory->data[*Z_envZ_DYNAMICTOP_PTRZ_i])) = newDynamicTop;
+  i32_store(Z_envZ_memory, *Z_envZ_DYNAMICTOP_PTRZ_i, newDynamicTop);
   int32_t totalMemory = getTotalMemory();
   if (newDynamicTop > totalMemory) {
     if (enlargeMemory() == 0) {
-      *((uint32_t*)&(Z_envZ_memory->data[*Z_envZ_DYNAMICTOP_PTRZ_i])) = oldDynamicTop;
+      i32_store(Z_envZ_memory, *Z_envZ_DYNAMICTOP_PTRZ_i, oldDynamicTop);
       setErrNo(12);
       return -1;
     }
@@ -226,7 +274,7 @@ void getErrLocation()
 void buildEnvironment(uint32_t ptr)
 {
   //for now we don't support environments
-  *((uint32_t*)&(Z_envZ_memory->data[ptr])) = 0;
+  i32_store(Z_envZ_memory, ptr, 0);
 }
 
 uint32_t getenv_impl(uint32_t name)
@@ -272,8 +320,7 @@ static void wasm_set_constants()
   STACK_BASE = STACKTOP = alignMemory(STATICTOP);
   uint32_t STACK_MAX = STACK_BASE + TOTAL_STACK;
   uint32_t DYNAMIC_BASE = alignMemory(STACK_MAX);
-  uint32_t* dynamicBaseLoc = (uint32_t*)(&(Z_envZ_memory->data[DYNAMICTOP_PTR]));
-  *dynamicBaseLoc = DYNAMIC_BASE;
+  i32_store(Z_envZ_memory, DYNAMICTOP_PTR, DYNAMIC_BASE);
   assert(DYNAMIC_BASE < getTotalMemory() && "TOTAL_MEMORY not big enough for stack");
 
   // STACKTOP = STACK_BASE + TOTAL_STACK;
@@ -302,6 +349,7 @@ static void wasm_set_stack()
 }
 
 void wasm_rt_allocate_memory(wasm_rt_memory_t* memory, uint32_t initial_pages, uint32_t max_pages);
+void (*_E__wasm_call_ctors)(void);
 
 void wasm_init_module()
 {
@@ -361,9 +409,13 @@ void wasm_init_module()
 
   if(wasm_is_LLVM_backend())
   {
-    uint32_t* loc0 = (uint32_t*)(&(Z_envZ_memory->data[0/**Z_envZ_memoryBaseZ_i*/]));
-    *loc0 = 0x63736d65;
+    i32_store(Z_envZ_memory, 0, 0x63736d65);
   }
+
+  writeStackCookie();
+  checkStackCookie();
+
+  _E__wasm_call_ctors();
 }
 
 jmp_buf* wasm_get_setjmp_buff()
@@ -596,4 +648,11 @@ uint32_t wasm_rt_grow_memory(wasm_rt_memory_t*, uint32_t pages)
 {
   printf("Grow memory not supported!\n");
   exit(1);
+}
+
+extern uint32_t* Z___heap_baseZ_i;
+
+uint32_t wasm_get_heap_base()
+{
+  return *Z___heap_baseZ_i;
 }

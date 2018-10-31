@@ -93,6 +93,8 @@ private:
 	void (*wasm_ret_unregister_func)(uint32_t slotNumber);
 	void* (*wasm_rt_get_registered_func)(uint32_t slotNumber);
 	uint32_t (*wasm_get_current_indirect_call_num)();
+	void (*checkStackCookie)();
+	uint32_t (*wasm_get_heap_base)();
 	void* wasm_memory;
 	size_t wasm_memory_size;
 
@@ -291,6 +293,8 @@ private:
 
 		WasmSandboxImpl::CurrThreadSandbox = oldCurrThreadSandbox;
 
+		checkStackCookie();
+
 		for(auto ptr : allocatedPointers)
 		{
 			freeInSandbox(ptr);
@@ -312,6 +316,8 @@ private:
 		(*fnPtrCast)(args...);
 
 		WasmSandboxImpl::CurrThreadSandbox = oldCurrThreadSandbox;
+
+		checkStackCookie();
 
 		for(auto ptr : allocatedPointers)
 		{
@@ -437,7 +443,7 @@ public:
 		{
 			//Function called failed
 			printf("Wasm function call failed with trap code: %d\n", trapCode);
-			exit(1);
+			abort();
 		}
 	}
 
