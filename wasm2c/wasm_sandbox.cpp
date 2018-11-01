@@ -65,7 +65,7 @@ WasmSandbox* WasmSandbox::createSandbox(const char* path)
 	getSymbol(ret->checkStackCookie, checkStackCookieType, checkStackCookie);
 
 	using wasmGetHeapBaseType = uint32_t (*)();
-	getSymbol(ret->wasm_get_heap_base, wasmGetHeapBaseType, wasm_get_current_indirect_call_num);
+	getSymbol(ret->wasm_get_heap_base, wasmGetHeapBaseType, wasm_get_heap_base);
 
 	wasm_rt_memory_t** wasm_memory_st;
 	getSymbol(wasm_memory_st, wasm_rt_memory_t**, Z_envZ_memory);
