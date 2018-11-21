@@ -1,3 +1,6 @@
+#ifndef WASM_SANDBOX_H_
+#define WASM_SANDBOX_H_
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -8,17 +11,13 @@
 #include <mutex>
 #include <string>
 
-#ifndef WASM_RT_H_
-	//Need some structs from the wasm runtime, but don't want a dependency on that header, so include it manually here
-	typedef enum {
-		WASM_RT_I32,
-		WASM_RT_I64,
-		WASM_RT_F32,
-		WASM_RT_F64,
-	} wasm_rt_type_t;
-
-#endif
-
+//Need some structs from the wasm runtime, but don't want a dependency on that header, so include it with a new name here
+typedef enum {
+	DUP_WASM_RT_I32,
+	DUP_WASM_RT_I64,
+	DUP_WASM_RT_F32,
+	DUP_WASM_RT_F64,
+} wasm_rt_type_t_dup;
 
 class WasmSandbox;
 
@@ -88,7 +87,7 @@ private:
 	jmp_buf* (*wasm_get_setjmp_buff)();
 	uint32_t(*wasm_malloc)(size_t);
 	void(*wasm_free)(uint32_t);
-	uint32_t (*wasm_rt_register_func_type_with_lists)(std::vector<wasm_rt_type_t> *, std::vector<wasm_rt_type_t> *);
+	uint32_t (*wasm_rt_register_func_type_with_lists)(std::vector<wasm_rt_type_t_dup> *, std::vector<wasm_rt_type_t_dup> *);
 	uint32_t (*wasm_rt_register_func)(void(*func)(), uint32_t funcType);
 	void (*wasm_ret_unregister_func)(uint32_t slotNumber);
 	void* (*wasm_rt_get_registered_func)(uint32_t slotNumber);
@@ -206,49 +205,49 @@ private:
 	template<typename T, typename std::enable_if<
 		sizeof(T) <= 4 && std::is_fundamental<T>::value && !std::is_floating_point<T>::value && !std::is_pointer<T>::value
 	>::type* = nullptr>
-	wasm_rt_type_t getWasmType()
+	wasm_rt_type_t_dup getWasmType()
 	{
-		return WASM_RT_I32;
+		return DUP_WASM_RT_I32;
 	}
 
 	template<typename T, typename std::enable_if<
 		!(sizeof(T) <= 4) && sizeof(T) <= 8 && std::is_fundamental<T>::value && !std::is_floating_point<T>::value && !std::is_pointer<T>::value
 	>::type* = nullptr>
-	wasm_rt_type_t getWasmType()
+	wasm_rt_type_t_dup getWasmType()
 	{
-		return WASM_RT_I64;
+		return DUP_WASM_RT_I64;
 	}
 
 	template<typename T, typename std::enable_if<
 		std::is_same<T, float>::value
 	>::type* = nullptr>
-	wasm_rt_type_t getWasmType()
+	wasm_rt_type_t_dup getWasmType()
 	{
-		return WASM_RT_F32;
+		return DUP_WASM_RT_F32;
 	}
 
 	template<typename T, typename std::enable_if<
 		std::is_same<T, double>::value
 	>::type* = nullptr>
-	wasm_rt_type_t getWasmType()
+	wasm_rt_type_t_dup getWasmType()
 	{
-		return WASM_RT_F64;
+		return DUP_WASM_RT_F64;
 	}
 
 	template<typename T, typename std::enable_if<
 		std::is_pointer<T>::value
 	>::type* = nullptr>
-	wasm_rt_type_t getWasmType()
+	wasm_rt_type_t_dup getWasmType()
 	{
-		return WASM_RT_I32;
+		return DUP_WASM_RT_I32;
 	}
 
 	template<typename T, typename std::enable_if<
 		std::is_class<T>::value
 	>::type* = nullptr>
-	wasm_rt_type_t getWasmType()
+	wasm_rt_type_t_dup getWasmType()
 	{
-		return WASM_RT_I32;
+		return DUP_WASM_RT_I32;
 	}
 
 	//Handle the fact that struct returns are passed as out params per the calling convention
@@ -325,7 +324,7 @@ private:
 		}
 	}
 
-	WasmSandboxCallback* registerCallbackImpl(void* state, void(*callback)(), void(*callbackStub)(), std::vector<wasm_rt_type_t> params, std::vector<wasm_rt_type_t> results);
+	WasmSandboxCallback* registerCallbackImpl(void* state, void(*callback)(), void(*callbackStub)(), std::vector<wasm_rt_type_t_dup> params, std::vector<wasm_rt_type_t_dup> results);
 
 	template <typename... Types>
 	struct invokeCallbackTargetHelper {};
@@ -448,24 +447,24 @@ public:
 	}
 
 	template<typename TRet, typename std::enable_if<std::is_void<TRet>::value>::type* = nullptr>
-	std::vector<wasm_rt_type_t> getCallbackReturnWasmVec()
+	std::vector<wasm_rt_type_t_dup> getCallbackReturnWasmVec()
 	{
-		std::vector<wasm_rt_type_t> ret;
+		std::vector<wasm_rt_type_t_dup> ret;
 		return ret;
 	}
 
 	template<typename TRet, typename std::enable_if<!std::is_void<TRet>::value>::type* = nullptr>
-	std::vector<wasm_rt_type_t> getCallbackReturnWasmVec()
+	std::vector<wasm_rt_type_t_dup> getCallbackReturnWasmVec()
 	{
-		std::vector<wasm_rt_type_t> ret{ getWasmType<TRet>()};
+		std::vector<wasm_rt_type_t_dup> ret{ getWasmType<TRet>()};
 		return ret;
 	}
 
 	template<typename TRet, typename... TArgs>
 	WasmSandboxCallback* registerCallback(TRet(*callback)(void*, TArgs...), void* state)
 	{
-		std::vector<wasm_rt_type_t> params { getWasmType<TArgs>()...};
-		std::vector<wasm_rt_type_t> returns = getCallbackReturnWasmVec<TRet>();
+		std::vector<wasm_rt_type_t_dup> params { getWasmType<TArgs>()...};
+		std::vector<wasm_rt_type_t_dup> returns = getCallbackReturnWasmVec<TRet>();
 		using voidVoidType = void(*)();
 
 		auto callbackStubRef = callbackStub<TRet, TArgs...>; 
@@ -492,3 +491,5 @@ public:
 		return wasm_memory;
 	}
 };
+
+#endif

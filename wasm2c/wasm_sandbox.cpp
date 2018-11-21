@@ -46,7 +46,7 @@ WasmSandbox* WasmSandbox::createSandbox(const char* path)
 	using freeType = void(*)(uint32_t);
 	ret->wasm_free = (freeType) ret->symbolLookup("free");
 
-	using registerFuncTypeType = uint32_t (*)(std::vector<wasm_rt_type_t> *, std::vector<wasm_rt_type_t> *);
+	using registerFuncTypeType = uint32_t (*)(std::vector<wasm_rt_type_t_dup> *, std::vector<wasm_rt_type_t_dup> *);
 	getSymbol(ret->wasm_rt_register_func_type_with_lists, registerFuncTypeType, wasm_rt_register_func_type_with_lists);
 
 	using registerFuncType = uint32_t(*)(void(*)(), uint32_t);
@@ -90,7 +90,7 @@ void* WasmSandbox::symbolLookup(const char* name)
 	return *symbolAddr;
 }
 
-WasmSandboxCallback* WasmSandbox::registerCallbackImpl(void* state, void(*callback)(), void(*callbackStub)(), std::vector<wasm_rt_type_t> params, std::vector<wasm_rt_type_t> results)
+WasmSandboxCallback* WasmSandbox::registerCallbackImpl(void* state, void(*callback)(), void(*callbackStub)(), std::vector<wasm_rt_type_t_dup> params, std::vector<wasm_rt_type_t_dup> results)
 {
 	uint32_t func_type = wasm_rt_register_func_type_with_lists(&params, &results);
 	wasm_rt_anyfunc_t func = (wasm_rt_anyfunc_t)(void*)callbackStub;
