@@ -325,6 +325,7 @@ private:
 	}
 
 	WasmSandboxCallback* registerCallbackImpl(void* state, void(*callback)(), void(*callbackStub)(), std::vector<wasm_rt_type_t_dup> params, std::vector<wasm_rt_type_t_dup> results);
+	void* registerInternalCallbackImpl(void(*callback)(), std::vector<wasm_rt_type_t_dup> params, std::vector<wasm_rt_type_t_dup> results);
 
 	template <typename... Types>
 	struct invokeCallbackTargetHelper {};
@@ -469,6 +470,17 @@ public:
 
 		auto callbackStubRef = callbackStub<TRet, TArgs...>; 
 		auto ret = registerCallbackImpl(state, (voidVoidType)(void*)callback, (voidVoidType)(void*)callbackStubRef, params, returns);
+		return ret;
+	}
+
+	template<typename TRet, typename... TArgs>
+	void* registerInternalCallback(TRet(*callback)(TArgs...))
+	{
+		std::vector<wasm_rt_type_t_dup> params { getWasmType<TArgs>()...};
+		std::vector<wasm_rt_type_t_dup> returns = getCallbackReturnWasmVec<TRet>();
+		using voidVoidType = void(*)();
+
+		auto ret = registerInternalCallbackImpl((voidVoidType)(void*)callback, params, returns);
 		return ret;
 	}
 

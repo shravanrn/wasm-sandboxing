@@ -109,6 +109,14 @@ WasmSandboxCallback* WasmSandbox::registerCallbackImpl(void* state, void(*callba
 	return ret;
 }
 
+void* WasmSandbox::registerInternalCallbackImpl(void(*callback)(), std::vector<wasm_rt_type_t_dup> params, std::vector<wasm_rt_type_t_dup> results)
+{
+	uint32_t func_type = wasm_rt_register_func_type_with_lists(&params, &results);
+	wasm_rt_anyfunc_t func = (wasm_rt_anyfunc_t)(void*)callback;
+	uintptr_t callbackSlot = wasm_rt_register_func(func, func_type);
+	return (void*) callbackSlot;
+}
+
 void WasmSandbox::unregisterCallback(WasmSandboxCallback* callback)
 {
 	if(!callback) {	return;	}
