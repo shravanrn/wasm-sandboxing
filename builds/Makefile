@@ -14,7 +14,9 @@ wabt_bin:
 	$(MAKE) -C ../ gcc-release
 
 wasm_sandbox_lib:
-	cd ../wasm2c/ && g++ $(CFLAGS) -fPIC -shared wasm_sandbox.cpp -o ../bin/libwasm_sandbox.a
+	cd ../wasm2c/ && \
+	g++ $(CFLAGS) -fPIC -shared wasm_sandbox.cpp -o ../bin/libwasm_sandbox.o && \
+	ar crf ../bin/libwasm_sandbox.a ../bin/libwasm_sandbox.o
 
 .ONESHELL:
 SHELL=/bin/bash

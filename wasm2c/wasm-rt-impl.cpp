@@ -29,6 +29,8 @@
 #include <mutex>
 #include <map>
 #include <vector>
+#include <unistd.h>
+#include <sys/types.h>
 
 #define PAGE_SIZE 65536
 #define FUNC_TABLE_SIZE 1024
@@ -139,14 +141,14 @@ void checkStackCookie() {
   uint32_t c1 = i32_load(Z_envZ_memory, *Z_envZ_STACK_MAXZ_i - 4);
   uint32_t c2 = i32_load(Z_envZ_memory, *Z_envZ_STACK_MAXZ_i - 8);
   if (c1 != 0x02135467 || c2 != 0x89BACDFE) {
-    printf("Stack overflow! Stack cookie has been overwritten, expected hex dwords 0x89BACDFE and 0x02135467, but received %d %d",
+    printf("Stack overflow! Stack cookie has been overwritten, expected hex dwords 0x89BACDFE and 0x02135467, but received %d %d\n",
       c1, c2);
       abort();
   }
   // Also test the global address 0 for integrity. This check is not compatible with SAFE_SPLIT_MEMORY though, since that mode already tests all address 0 accesses on its own.
   uint32_t nc = i32_load(Z_envZ_memory, 0);
   if (nc != 0x63736d65 /* 'emsc' */) {
-    printf("Runtime error: The application has corrupted its heap memory area (address zero)!");
+    printf("Runtime error: The application has corrupted its heap memory area (address zero)!\n");
     abort();
   }
 }
@@ -177,19 +179,19 @@ void abortStackOverflowCalled(uint32_t param)
 
 void nullFunc_X(uint32_t param)
 {
-  printf("Invalid function pointer called with signature 'X': %u", param);
+  printf("Invalid function pointer called with signature 'X': %u\n", param);
   abort();
 }
 
 void nullFunc_ii(uint32_t param) 
 { 
-  printf("Invalid function pointer called with signature 'ii': %u", param);
+  printf("Invalid function pointer called with signature 'ii': %u\n", param);
   abort();
 }
 
 void nullFunc_iiii(uint32_t param) 
 { 
-  printf("Invalid function pointer called with signature 'iiii': %u", param);
+  printf("Invalid function pointer called with signature 'iiii': %u\n", param);
   abort();
 }
 
@@ -265,8 +267,8 @@ void getErrLocation()
     errno_location = _E___errno_location;
     if(!errno_location)
     {
-      printf("Error occurred trying to find the __errno_location symbol");
-      exit(1);
+      printf("Error occurred trying to find the __errno_location symbol\n");
+      abort();
     }
   }
 }
@@ -455,7 +457,7 @@ uint32_t wasm_rt_register_func_type(uint32_t param_count,
   if(!func_type.params || !func_type.results)
   {
     printf("Failed to allocate register_func_type memory!\n");
-    exit(1);
+    abort();
   }
 
   va_list args;
@@ -487,7 +489,7 @@ uint32_t wasm_rt_register_func_type(uint32_t param_count,
   if(!g_func_types)
   {
     printf("Failed to allocate wasm function types table!\n");
-    exit(1);
+    abort();
   }
   g_func_types[idx] = func_type;
   return idx + 1;
@@ -508,7 +510,7 @@ uint32_t wasm_rt_register_func_type_with_lists(void* p_params, void* p_results) 
     if(!func_type.params)
     {
       printf("Failed to allocate register_func_type memory!\n");
-      exit(1);
+      abort();
     }
   }
   else
@@ -523,7 +525,7 @@ uint32_t wasm_rt_register_func_type_with_lists(void* p_params, void* p_results) 
     if(!func_type.results)
     {
       printf("Failed to allocate register_func_type memory!\n");
-      exit(1);
+      abort();
     }
   }
   else
@@ -560,7 +562,7 @@ uint32_t wasm_rt_register_func_type_with_lists(void* p_params, void* p_results) 
   if(!g_func_types)
   {
     printf("Failed to allocate wasm function types table!\n");
-    exit(1);
+    abort();
   }
   g_func_types[idx] = func_type;
   return idx + 1;
@@ -582,7 +584,7 @@ uint32_t wasm_rt_register_func(wasm_rt_anyfunc_t func, uint32_t funcType)
   }
 
   printf("Register functions ran out of slots\n");
-  exit(1);
+  abort();
 }
 
 void wasm_ret_unregister_func(uint32_t slotNumber)
@@ -618,7 +620,7 @@ void wasm_rt_allocate_memory(wasm_rt_memory_t* memory,
   if(!memory->data)
   {
     printf("Failed to allocate sandbox memory!\n");
-    exit(1);
+    abort();
   }
 }
 
@@ -632,7 +634,7 @@ void wasm_rt_allocate_table_real(wasm_rt_table_t* table,
   if(!table->data)
   {
     printf("Failed to allocate sandbox Wasm table!\n");
-    exit(1);
+    abort();
   }
 }
 
@@ -647,7 +649,7 @@ void wasm_rt_allocate_table(wasm_rt_table_t* table,
 uint32_t wasm_rt_grow_memory(wasm_rt_memory_t*, uint32_t pages)
 {
   printf("Grow memory not supported!\n");
-  exit(1);
+  abort();
 }
 
 extern uint32_t* Z___heap_baseZ_i;
