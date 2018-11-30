@@ -67,8 +67,6 @@ namespace WasmSandboxImpl
 	uint32_t convertArg(wrapper<T> arg);
 
 	void convertArg(wrapper<void> arg);
-
-	extern thread_local WasmSandbox* CurrThreadSandbox;
 }
 
 class WasmSandboxCallback
@@ -285,12 +283,12 @@ private:
 	TRet>::type
 	invokeFunctionWithArgs(void* fnPtr, std::vector<void*>& allocatedPointers, TArgs... args)
 	{
-		auto oldCurrThreadSandbox = WasmSandboxImpl::CurrThreadSandbox;
-		WasmSandboxImpl::CurrThreadSandbox = this;
+		auto oldCurrThreadSandbox = getCurrThreadSandbox();
+		setCurrThreadSandbox(this);
 
 		auto ret = invokeFunctionWithArgsAndRetParam<TRet, TArgs...>(fnPtr, args...);
 
-		WasmSandboxImpl::CurrThreadSandbox = oldCurrThreadSandbox;
+		setCurrThreadSandbox(oldCurrThreadSandbox);
 
 		checkStackCookie();
 
@@ -307,14 +305,14 @@ private:
 	void>::type
 	invokeFunctionWithArgs(void* fnPtr, std::vector<void*>& allocatedPointers, TArgs... args)
 	{
-		auto oldCurrThreadSandbox = WasmSandboxImpl::CurrThreadSandbox;
-		WasmSandboxImpl::CurrThreadSandbox = this;
+		auto oldCurrThreadSandbox = getCurrThreadSandbox();
+		setCurrThreadSandbox(this);
 
 		using TargetFuncType = void(*)(TArgs...);
 		TargetFuncType fnPtrCast = (TargetFuncType) fnPtr;
 		(*fnPtrCast)(args...);
 
-		WasmSandboxImpl::CurrThreadSandbox = oldCurrThreadSandbox;
+		setCurrThreadSandbox(oldCurrThreadSandbox);
 
 		checkStackCookie();
 
@@ -421,7 +419,7 @@ private:
 	template<typename TRet, typename... TArgs>
 	static wasm_return_type<TRet> callbackStub(wasm_return_type<TArgs>... args)
 	{
-		return WasmSandboxImpl::CurrThreadSandbox->callbackStubImpl<TRet, TArgs...>(args...);
+		return getCurrThreadSandbox()->callbackStubImpl<TRet, TArgs...>(args...);
 	}
 
 public:
@@ -497,6 +495,9 @@ public:
 	void freeInSandbox(void* ptr);
 
 	size_t getTotalMemory();
+
+	static WasmSandbox* getCurrThreadSandbox();
+	static void setCurrThreadSandbox(WasmSandbox* sandbox);
 	
 	inline void* getSandboxMemoryBase()
 	{

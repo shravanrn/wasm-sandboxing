@@ -12,7 +12,7 @@ if(!lhs) { \
 	return nullptr; \
 } do {} while(0)
 
-thread_local WasmSandbox* WasmSandboxImpl::CurrThreadSandbox = 0;
+static thread_local WasmSandbox* CurrThreadSandbox = 0;
 
 WasmSandbox* WasmSandbox::createSandbox(const char* path)
 {
@@ -31,11 +31,7 @@ WasmSandbox* WasmSandbox::createSandbox(const char* path)
 
 	wasm_init_module();
 
-	using intvoidPtr = uint32_t(*)();
-	intvoidPtr wasm_is_LLVM_backend;
-	getSymbol(wasm_is_LLVM_backend, intvoidPtr, wasm_is_LLVM_backend);
-
-	ret->ExportPrefix = wasm_is_LLVM_backend()? "_E" : "_E_";
+	ret->ExportPrefix = "_E";
 
 	using jmpbufpvoidPtr = jmp_buf*(*)();
 	getSymbol(ret->wasm_get_setjmp_buff, jmpbufpvoidPtr, wasm_get_setjmp_buff);
@@ -227,4 +223,14 @@ void WasmSandbox::freeInSandbox(void* ptr)
 size_t WasmSandbox::getTotalMemory()
 {
 	return wasm_memory_size;
+}
+
+WasmSandbox* WasmSandbox::getCurrThreadSandbox()
+{
+	return CurrThreadSandbox;
+}
+
+void WasmSandbox::setCurrThreadSandbox(WasmSandbox* sandbox)
+{
+	CurrThreadSandbox = sandbox;
 }

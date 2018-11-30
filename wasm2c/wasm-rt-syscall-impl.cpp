@@ -5,47 +5,32 @@
 #include <string.h>
 #include "wasm-rt.h"
 
-//Create 2 symbols formats for runtime - the emscripten(fastcomp) backend as well as the native llvm wasm backend
-//Syscalls WASM32 with LP64 model in C
-uint64_t (*Z_envZ___syscall140Z_jii)(uint32_t, uint32_t);
-uint64_t (*Z_envZ____syscall140Z_jii)(uint32_t, uint32_t);
-uint32_t (*Z_envZ___syscall140Z_iii)(uint32_t, uint32_t);
-uint32_t (*Z_envZ____syscall140Z_iii)(uint32_t, uint32_t);
-
-uint64_t (*Z_envZ___syscall146Z_jii)(uint32_t, uint32_t);
-uint64_t (*Z_envZ____syscall146Z_jii)(uint32_t, uint32_t);
-uint32_t (*Z_envZ___syscall146Z_iii)(uint32_t, uint32_t);
-uint32_t (*Z_envZ____syscall146Z_iii)(uint32_t, uint32_t);
-
-
-uint64_t (*Z_envZ___syscall54Z_jii)(uint32_t, uint32_t);
-uint64_t (*Z_envZ____syscall54Z_jii)(uint32_t, uint32_t);
-uint32_t (*Z_envZ___syscall54Z_iii)(uint32_t, uint32_t);
-uint32_t (*Z_envZ____syscall54Z_iii)(uint32_t, uint32_t);
-
+uint64_t (*Z_envZ___syscall3Z_jii)(uint32_t, uint32_t);
+uint64_t (*Z_envZ___syscall4Z_jii)(uint32_t, uint32_t);
+uint64_t (*Z_envZ___syscall5Z_jii)(uint32_t, uint32_t);
 uint64_t (*Z_envZ___syscall6Z_jii)(uint32_t, uint32_t);
-uint64_t (*Z_envZ____syscall6Z_jii)(uint32_t, uint32_t);
-uint32_t (*Z_envZ___syscall6Z_iii)(uint32_t, uint32_t);
-uint32_t (*Z_envZ____syscall6Z_iii)(uint32_t, uint32_t);
+uint64_t (*Z_envZ___syscall54Z_jii)(uint32_t, uint32_t);
+uint64_t (*Z_envZ___syscall221Z_jii)(uint32_t, uint32_t);
+uint64_t (*Z_envZ___syscall140Z_jii)(uint32_t, uint32_t);
+uint64_t (*Z_envZ___syscall146Z_jii)(uint32_t, uint32_t);
 
 extern wasm_rt_memory_t *Z_envZ_memory;
 extern uint32_t *Z_envZ_memoryBaseZ_i;
 
-uint32_t sys_writev_wrap(uint32_t syscallnum, uint32_t args);
+uint64_t sys_na(uint32_t syscallnum, uint32_t args);
 uint64_t sys_writev(uint32_t syscallnum, uint32_t args);
-uint32_t sys_ioctl_wrap(uint32_t syscallnum, uint32_t args);
 uint64_t sys_ioctl(uint32_t syscallnum, uint32_t args);
 
 void initSyscalls()
 {
-	Z_envZ___syscall140Z_jii = Z_envZ____syscall140Z_jii = 0;
-	Z_envZ___syscall140Z_iii = Z_envZ____syscall140Z_iii = 0;
-	Z_envZ___syscall146Z_jii = Z_envZ____syscall146Z_jii = sys_writev;
-	Z_envZ___syscall146Z_iii = Z_envZ____syscall146Z_iii = sys_writev_wrap;
-	Z_envZ___syscall54Z_jii = Z_envZ____syscall54Z_jii = sys_ioctl;
-	Z_envZ___syscall54Z_iii = Z_envZ____syscall54Z_iii = sys_ioctl_wrap;
-	Z_envZ___syscall6Z_jii = Z_envZ____syscall6Z_jii = 0;
-	Z_envZ___syscall6Z_iii = Z_envZ____syscall6Z_iii = 0;
+	Z_envZ___syscall3Z_jii = sys_na;
+	Z_envZ___syscall4Z_jii = sys_na;
+	Z_envZ___syscall5Z_jii = sys_na;
+	Z_envZ___syscall6Z_jii = sys_na;
+	Z_envZ___syscall54Z_jii = sys_ioctl;
+	Z_envZ___syscall140Z_jii = sys_na;
+	Z_envZ___syscall146Z_jii = sys_writev;
+	Z_envZ___syscall221Z_jii = sys_na;
 }
 
 #define UNLIKELY(x) __builtin_expect(!!(x), 0)
@@ -104,15 +89,7 @@ DEFINE_STORE(i64_store8, u8, u64);
 DEFINE_STORE(i64_store16, u16, u64);
 DEFINE_STORE(i64_store32, u32, u64);
 
-struct iovec_custom { char *iov_base; size_t iov_len; };
-struct iovec_custom_32 { unsigned int iov_base; unsigned int iov_len; };
-
-static uint32_t getArg32_32(uint32_t& args)
-{
-	uint32_t ret = i32_load(Z_envZ_memory, args);
-	args += 4;
-	return ret;
-}
+struct iovec_custom { uint32_t iov_base; uint32_t padding; uint32_t iov_len; uint32_t padding2; };
 
 static uint32_t getArg32(uint32_t& args)
 {
@@ -145,41 +122,10 @@ static uintptr_t getUnsandboxedPointer(uintptr_t arg64, size_t size)
 	return (uintptr_t) &(Z_envZ_memory->data[retIndex]);
 }
 
-uint32_t sys_writev_wrap(uint32_t syscallnum, uint32_t args)
+uint64_t sys_na(uint32_t syscallnum, uint32_t args)
 {
-	uint32_t expectedSyscallNum = 146;
-	if(syscallnum != expectedSyscallNum)
-	{
-		printf("Syscall number mismatch %d, %d", syscallnum, expectedSyscallNum);
-		exit(1);
-	}
-
-	uint32_t stream = getArg32_32(args);
-	uintptr_t sandboxed_iov = (uintptr_t)getArg32_32(args);
-	uint32_t iovcnt = getArg32_32(args);
-
-	if(stream != 1)
-	{
-		printf("Syscall %d. Expected descriptor 1", expectedSyscallNum);
-		exit(1);
-	}
-
-	struct iovec_custom_32* iov = (struct iovec_custom_32*) getUnsandboxedPointer(sandboxed_iov, iovcnt * sizeof(struct iovec_custom_32));
-	uint32_t ret = 0;
-
-	for (uint32_t i = 0; i < iovcnt; i++) {
-		struct iovec_custom_32* curr_iov = &(iov[i]);
-
-		size_t len = curr_iov->iov_len;
-		char* iov_base = (char*) getUnsandboxedPointer((uintptr_t) curr_iov->iov_base, len);
-
-		for (size_t j = 0; j < len; j++) {
-			putchar(iov_base[j]);
-		}
-		ret += len;
-	}
-
-	return ret;
+	printf("Syscall not implemented %d\n", syscallnum);
+	abort();
 }
 
 uint64_t sys_writev(uint32_t syscallnum, uint32_t args)
@@ -187,18 +133,18 @@ uint64_t sys_writev(uint32_t syscallnum, uint32_t args)
 	uint32_t expectedSyscallNum = 146;
 	if(syscallnum != expectedSyscallNum)
 	{
-		printf("Syscall number mismatch %d, %d", syscallnum, expectedSyscallNum);
-		exit(1);
+		printf("Syscall number mismatch %d, %d\n", syscallnum, expectedSyscallNum);
+		abort();
 	}
 
 	uint32_t stream = getArg32(args);
 	uintptr_t sandboxed_iov = (uintptr_t)getArg64(args);
 	uint32_t iovcnt = getArg32(args);
 
-	if(stream != 1)
+	if(stream != 1 && stream != 2)
 	{
-		printf("Syscall %d. Expected descriptor 1", expectedSyscallNum);
-		exit(1);
+		printf("Syscall %d. Expected descriptor 1 or 2\n", expectedSyscallNum);
+		abort();
 	}
 
 	struct iovec_custom* iov = (struct iovec_custom*) getUnsandboxedPointer(sandboxed_iov, iovcnt * sizeof(struct iovec_custom));
@@ -219,19 +165,14 @@ uint64_t sys_writev(uint32_t syscallnum, uint32_t args)
 	return ret;
 }
 
-uint32_t sys_ioctl_wrap(uint32_t syscallnum, uint32_t args)
-{
-	return sys_ioctl(syscallnum, args);
-}
-
 //as implemented in the js runtime
 uint64_t sys_ioctl(uint32_t syscallnum, uint32_t args)
 {
 	uint32_t expectedSyscallNum = 54;
 	if(syscallnum != expectedSyscallNum)
 	{
-		printf("Syscall number mismatch %d, %d", syscallnum, expectedSyscallNum);
-		exit(1);
+		printf("Syscall number mismatch %d, %d\n", syscallnum, expectedSyscallNum);
+		abort();
 	}
 
 	return 0;

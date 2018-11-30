@@ -285,12 +285,6 @@ uint32_t getenv_impl(uint32_t name)
   return 0;
 }
 
-
-uint32_t wasm_is_LLVM_backend()
-{
-  return _E__errno_location != 0;
-}
-
 uint32_t STACK_ALIGN = 16;
 
 static uint32_t staticAlloc(uint32_t* STATICTOP, uint32_t size) {
@@ -409,10 +403,7 @@ void wasm_init_module()
 
   getErrLocation();
 
-  if(wasm_is_LLVM_backend())
-  {
-    i32_store(Z_envZ_memory, 0, 0x63736d65);
-  }
+  i32_store(Z_envZ_memory, 0, 0x63736d65);
 
   writeStackCookie();
   checkStackCookie();
