@@ -206,7 +206,7 @@ int WasmSandbox::isAddressInSandboxMemoryOrNull(const void* p)
 void* WasmSandbox::mallocInSandbox(size_t size)
 {
 	uintptr_t ret = invokeFunction(wasm_malloc, size);
-	if(ret < wasm_get_heap_base())
+	if(ret != 0 && ret < wasm_get_heap_base())
 	{
 		printf("WasmSandbox::mallocInSandbox returned a value not in the heap\n");
 		abort();
