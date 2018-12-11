@@ -70,30 +70,38 @@ double *Z_globalZ_NaNZ_d;
 double *Z_globalZ_InfinityZ_d;
 uint32_t *Z_envZ_ABORTZ_i;
 
-//Create 2 symbols formats for runtime - the emscripten(fastcomp) backend as well as the native llvm wasm backend
 void (*Z_envZ_abortZ_vv)(void);
-void (*Z_envZ__abortZ_vv)(void);
 void (*Z_envZ_abortZ_vi)(uint32_t);
-void (*Z_envZ__abortZ_vi)(uint32_t);
 uint32_t (*Z_envZ_abortOnCannotGrowMemoryZ_iv)();
 void (*Z_envZ_abortStackOverflowZ_vi)(uint32_t);
 void (*Z_envZ____setErrNoZ_vi)(uint32_t);
 uint32_t (*Z_envZ_enlargeMemoryZ_iv)();
 uint32_t (*Z_envZ_getTotalMemoryZ_iv)(void);
 void (*Z_envZ___lockZ_vi)(uint32_t);
-void (*Z_envZ____lockZ_vi)(uint32_t);
 void (*Z_envZ___unlockZ_vi)(uint32_t);
-void (*Z_envZ____unlockZ_vi)(uint32_t);
 uint32_t (*Z_envZ__emscripten_memcpy_bigZ_iiii)(uint32_t, uint32_t, uint32_t);
 void (*Z_envZ_nullFunc_XZ_vi)(uint32_t);
 void (*Z_envZ_nullFunc_iiZ_vi)(uint32_t);
 void (*Z_envZ_nullFunc_iiiiZ_vi)(uint32_t);
+void (*Z_envZ_invoke_viZ_vii)(uint32_t, uint32_t);
+void (*Z_envZ_invoke_viiZ_viii)(uint32_t, uint32_t, uint32_t);
+void (*Z_envZ_invoke_viiiZ_viiii)(uint32_t, uint32_t, uint32_t, uint32_t);
+void (*Z_envZ_invoke_viiiiZ_viiiii)(uint32_t, uint32_t, uint32_t, uint32_t, uint32_t);
+uint32_t (*Z_envZ_invoke_iiZ_iii)(uint32_t, uint32_t);
+uint32_t (*Z_envZ_invoke_iiiZ_iiii)(uint32_t, uint32_t, uint32_t);
+uint32_t (*Z_envZ_invoke_iiiiZ_iiiii)(uint32_t, uint32_t, uint32_t, uint32_t);
+uint32_t (*Z_envZ_invoke_iiiiiZ_iiiiii)(uint32_t, uint32_t, uint32_t, uint32_t, uint32_t);
 uint32_t (*Z_envZ_sbrkZ_ii)(uint32_t);
-uint32_t (*Z_envZ_sbrkZ_ij)(uint64_t);
 void (*Z_envZ_exitZ_vi)(uint32_t);
 uint32_t (*Z_envZ_getenvZ_ii)(uint32_t);
 void (*Z_envZ___buildEnvironmentZ_vi)(uint32_t);
 double (*Z_envZ_fabsZ_dd)(double);
+uint32_t (*Z_envZ_gmtimeZ_ii)(uint32_t);
+double (*Z_envZ_sqrtZ_dd)(double);
+uint32_t (*Z_envZ_testSetjmpZ_iiii)(uint32_t, uint32_t, uint32_t);
+uint32_t (*Z_envZ_saveSetjmpZ_iiiii)(uint32_t, uint32_t, uint32_t, uint32_t);
+void (*Z_envZ_emscripten_longjmpZ_vii)(uint32_t, uint32_t);
+
 
 extern "C" {
 void init();
@@ -195,6 +203,48 @@ void nullFunc_iiii(uint32_t param)
   abort();
 }
 
+void dynCall_vi(uint32_t p0, uint32_t p1);
+void dynCall_vii(uint32_t p0, uint32_t p1, uint32_t p2);
+void dynCall_viii(uint32_t p0, uint32_t p1, uint32_t p2, uint32_t p3);
+void dynCall_viiii(uint32_t p0, uint32_t p1, uint32_t p2, uint32_t p3, uint32_t p4);
+uint32_t dynCall_ii(uint32_t p0, uint32_t p1);
+uint32_t dynCall_iii(uint32_t p0, uint32_t p1, uint32_t p2);
+uint32_t dynCall_iiii(uint32_t p0, uint32_t p1, uint32_t p2, uint32_t p3);
+uint32_t dynCall_iiiii(uint32_t p0, uint32_t p1, uint32_t p2, uint32_t p3, uint32_t p4);
+
+void invoke_vi(uint32_t p0, uint32_t p1)
+{
+  return dynCall_vi(p0, p1);
+}
+void invoke_vii(uint32_t p0, uint32_t p1, uint32_t p2)
+{
+  return dynCall_vii(p0, p1, p2);
+}
+void invoke_viii(uint32_t p0, uint32_t p1, uint32_t p2, uint32_t p3)
+{
+  return dynCall_viii(p0, p1, p2, p3);
+}
+void invoke_viiii(uint32_t p0, uint32_t p1, uint32_t p2, uint32_t p3, uint32_t p4)
+{
+  return dynCall_viiii(p0, p1, p2, p3, p4);
+}
+uint32_t invoke_ii(uint32_t p0, uint32_t p1)
+{
+  return dynCall_ii(p0, p1);
+}
+uint32_t invoke_iii(uint32_t p0, uint32_t p1, uint32_t p2)
+{
+  return dynCall_iii(p0, p1, p2);
+}
+uint32_t invoke_iiii(uint32_t p0, uint32_t p1, uint32_t p2, uint32_t p3)
+{
+  return dynCall_iiii(p0, p1, p2, p3);
+}
+uint32_t invoke_iiiii(uint32_t p0, uint32_t p1, uint32_t p2, uint32_t p3, uint32_t p4)
+{
+  return dynCall_iiiii(p0, p1, p2, p3, p4);
+}
+
 void setErrNo(uint32_t value)
 {
   uint32_t loc = errno_location();
@@ -229,9 +279,9 @@ void unlockImpl(uint32_t lockId)
   lockMap[lockId].unlock();
 }
 
-uint32_t sbrk_impl(uint64_t increment64) {
+uint32_t sbrk_impl(uint32_t increment_unsigned) {
 
-  int32_t increment = increment64; //clear top bits
+  int32_t increment = increment_unsigned; //fix sign
   int32_t oldDynamicTop = i32_load(Z_envZ_memory, *Z_envZ_DYNAMICTOP_PTRZ_i);
   int32_t newDynamicTop = oldDynamicTop + increment;
 
@@ -253,10 +303,6 @@ uint32_t sbrk_impl(uint64_t increment64) {
   }
 
   return oldDynamicTop;
-}
-
-uint32_t sbrk_impl_wrap(uint32_t increment) {
-  return sbrk_impl(increment);
 }
 
 void getErrLocation()
@@ -285,6 +331,12 @@ uint32_t getenv_impl(uint32_t name)
   return 0;
 }
 
+uint32_t gmtime_impl(uint32_t)
+{
+  printf("gmtime not implemented\n");
+  abort();
+}
+
 uint32_t STACK_ALIGN = 16;
 
 static uint32_t staticAlloc(uint32_t* STATICTOP, uint32_t size) {
@@ -297,6 +349,23 @@ static uint32_t staticAlloc(uint32_t* STATICTOP, uint32_t size) {
 static uint32_t alignMemory(uint32_t size) {
   uint32_t ret = ((uint32_t)ceil(size / STACK_ALIGN)) * STACK_ALIGN;
   return ret;
+}
+
+uint32_t testSetjmp(uint32_t id, uint32_t table, uint32_t size) {
+  printf("testSetjmp not implemented\n");
+  abort();
+}
+
+uint32_t saveSetjmp(uint32_t env, uint32_t label, uint32_t table, uint32_t size)
+{
+  printf("saveSetjmp not implemented\n");
+  abort();
+}
+
+void emscripten_longjmp(uint32_t env, uint32_t value) 
+{
+  printf("emscripten_longjmp not implemented\n");
+  abort();
 }
 
 void (*_EstackRestore)(uint32_t);
@@ -349,25 +418,37 @@ void (*_E__wasm_call_ctors)(void);
 
 void wasm_init_module()
 {
-  Z_envZ_abortZ_vv = Z_envZ__abortZ_vv = abortCalledVoid;
-  Z_envZ_abortZ_vi = Z_envZ__abortZ_vi = abortCalled;
+  Z_envZ_abortZ_vv = abortCalledVoid;
+  Z_envZ_abortZ_vi = abortCalled;
   Z_envZ_abortOnCannotGrowMemoryZ_iv = abortOnCannotGrowMemoryCalled;
   Z_envZ_abortStackOverflowZ_vi = abortStackOverflowCalled;
   Z_envZ____setErrNoZ_vi = setErrNo;
   Z_envZ_enlargeMemoryZ_iv = enlargeMemory;
   Z_envZ_getTotalMemoryZ_iv = getTotalMemory;
-  Z_envZ___lockZ_vi = Z_envZ____lockZ_vi = lockImpl;
-  Z_envZ___unlockZ_vi = Z_envZ____unlockZ_vi = unlockImpl;
+  Z_envZ___lockZ_vi = lockImpl;
+  Z_envZ___unlockZ_vi = unlockImpl;
   Z_envZ__emscripten_memcpy_bigZ_iiii = memcpy_big;
   Z_envZ_nullFunc_XZ_vi = nullFunc_X;
   Z_envZ_nullFunc_iiZ_vi = nullFunc_ii;
   Z_envZ_nullFunc_iiiiZ_vi = nullFunc_iiii;
-  Z_envZ_sbrkZ_ii = sbrk_impl_wrap;
-  Z_envZ_sbrkZ_ij = sbrk_impl;
+  Z_envZ_invoke_viZ_vii = invoke_vi;
+  Z_envZ_invoke_viiZ_viii = invoke_vii;
+  Z_envZ_invoke_viiiZ_viiii = invoke_viii;
+  Z_envZ_invoke_viiiiZ_viiiii = invoke_viiii;
+  Z_envZ_invoke_iiZ_iii = invoke_ii;
+  Z_envZ_invoke_iiiZ_iiii = invoke_iii;
+  Z_envZ_invoke_iiiiZ_iiiii = invoke_iiii;
+  Z_envZ_invoke_iiiiiZ_iiiiii = invoke_iiiii;
+  Z_envZ_sbrkZ_ii = sbrk_impl;
   Z_envZ_exitZ_vi = (decltype(Z_envZ_exitZ_vi))exit;
   Z_envZ_getenvZ_ii = getenv_impl;
   Z_envZ___buildEnvironmentZ_vi = buildEnvironment;
   Z_envZ_fabsZ_dd = fabs;
+  Z_envZ_gmtimeZ_ii = gmtime_impl;
+  Z_envZ_sqrtZ_dd = sqrt;
+  Z_envZ_testSetjmpZ_iiii = testSetjmp;
+  Z_envZ_saveSetjmpZ_iiiii = saveSetjmp;
+  Z_envZ_emscripten_longjmpZ_vii = emscripten_longjmp;
 
   Z_envZ_memoryBaseZ_i = (uint32_t *) malloc(sizeof(uint32_t));
   *Z_envZ_memoryBaseZ_i = 1024u;
