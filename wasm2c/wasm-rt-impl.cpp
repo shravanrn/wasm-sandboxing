@@ -29,6 +29,7 @@
 #include <mutex>
 #include <map>
 #include <vector>
+#include <atomic>
 #include <unistd.h>
 #include <sys/types.h>
 
@@ -203,46 +204,46 @@ void nullFunc_iiii(uint32_t param)
   abort();
 }
 
-void dynCall_vi(uint32_t p0, uint32_t p1);
-void dynCall_vii(uint32_t p0, uint32_t p1, uint32_t p2);
-void dynCall_viii(uint32_t p0, uint32_t p1, uint32_t p2, uint32_t p3);
-void dynCall_viiii(uint32_t p0, uint32_t p1, uint32_t p2, uint32_t p3, uint32_t p4);
-uint32_t dynCall_ii(uint32_t p0, uint32_t p1);
-uint32_t dynCall_iii(uint32_t p0, uint32_t p1, uint32_t p2);
-uint32_t dynCall_iiii(uint32_t p0, uint32_t p1, uint32_t p2, uint32_t p3);
-uint32_t dynCall_iiiii(uint32_t p0, uint32_t p1, uint32_t p2, uint32_t p3, uint32_t p4);
+void (*_EdynCall_vi)(uint32_t p0, uint32_t p1);
+void (*_EdynCall_vii)(uint32_t p0, uint32_t p1, uint32_t p2);
+void (*_EdynCall_viii)(uint32_t p0, uint32_t p1, uint32_t p2, uint32_t p3);
+void (*_EdynCall_viiii)(uint32_t p0, uint32_t p1, uint32_t p2, uint32_t p3, uint32_t p4);
+uint32_t (*_EdynCall_ii)(uint32_t p0, uint32_t p1);
+uint32_t (*_EdynCall_iii)(uint32_t p0, uint32_t p1, uint32_t p2);
+uint32_t (*_EdynCall_iiii)(uint32_t p0, uint32_t p1, uint32_t p2, uint32_t p3);
+uint32_t (*_EdynCall_iiiii)(uint32_t p0, uint32_t p1, uint32_t p2, uint32_t p3, uint32_t p4);
 
 void invoke_vi(uint32_t p0, uint32_t p1)
 {
-  return dynCall_vi(p0, p1);
+  return _EdynCall_vi(p0, p1);
 }
 void invoke_vii(uint32_t p0, uint32_t p1, uint32_t p2)
 {
-  return dynCall_vii(p0, p1, p2);
+  return _EdynCall_vii(p0, p1, p2);
 }
 void invoke_viii(uint32_t p0, uint32_t p1, uint32_t p2, uint32_t p3)
 {
-  return dynCall_viii(p0, p1, p2, p3);
+  return _EdynCall_viii(p0, p1, p2, p3);
 }
 void invoke_viiii(uint32_t p0, uint32_t p1, uint32_t p2, uint32_t p3, uint32_t p4)
 {
-  return dynCall_viiii(p0, p1, p2, p3, p4);
+  return _EdynCall_viiii(p0, p1, p2, p3, p4);
 }
 uint32_t invoke_ii(uint32_t p0, uint32_t p1)
 {
-  return dynCall_ii(p0, p1);
+  return _EdynCall_ii(p0, p1);
 }
 uint32_t invoke_iii(uint32_t p0, uint32_t p1, uint32_t p2)
 {
-  return dynCall_iii(p0, p1, p2);
+  return _EdynCall_iii(p0, p1, p2);
 }
 uint32_t invoke_iiii(uint32_t p0, uint32_t p1, uint32_t p2, uint32_t p3)
 {
-  return dynCall_iiii(p0, p1, p2, p3);
+  return _EdynCall_iiii(p0, p1, p2, p3);
 }
 uint32_t invoke_iiiii(uint32_t p0, uint32_t p1, uint32_t p2, uint32_t p3, uint32_t p4)
 {
-  return dynCall_iiiii(p0, p1, p2, p3, p4);
+  return _EdynCall_iiiii(p0, p1, p2, p3, p4);
 }
 
 void setErrNo(uint32_t value)
@@ -356,10 +357,33 @@ uint32_t testSetjmp(uint32_t id, uint32_t table, uint32_t size) {
   abort();
 }
 
+void (*_EsetTempRet0)(uint32_t);
+uint32_t (*_Erealloc)(uint32_t, uint32_t);
+
+std::atomic<uint32_t> setjmpId(0);
+
 uint32_t saveSetjmp(uint32_t env, uint32_t label, uint32_t table, uint32_t size)
 {
-  printf("saveSetjmp not implemented\n");
-  abort();
+  uint32_t newValue = ++setjmpId;
+  i32_store(Z_envZ_memory, env, newValue);
+
+  for(uint32_t i = 0; i < size; i++) {
+    auto loc = table+(i<<3);
+    if (i32_load(Z_envZ_memory, loc) == 0) {
+      i32_store(Z_envZ_memory, loc, newValue);
+      i32_store(Z_envZ_memory, loc + 4, label);
+      // prepare next slot
+      i32_store(Z_envZ_memory, loc + 8, 0);
+      _EsetTempRet0(size);
+      return table;
+    }
+  }
+  // grow the table
+  size = size * 2;
+  table = _Erealloc(table, 8 * (size+1));
+  table = saveSetjmp(env, label, table, size);
+  _EsetTempRet0(size);
+  return table;
 }
 
 void emscripten_longjmp(uint32_t env, uint32_t value) 
