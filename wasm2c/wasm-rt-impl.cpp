@@ -51,6 +51,57 @@ _Thread_local uint32_t wasm_rt_call_stack_depth;
 _Thread_local jmp_buf g_jmp_buf;
 #endif
 
+#define _NSIG 65
+
+struct pthread_copy {
+// XXX Emscripten: Need some custom thread control structures.
+	// Note: The specific order of these fields is important, since these are accessed
+	// by direct pointer arithmetic in pthread-main.js.
+	int threadStatus; // 0: thread not exited, 1: exited.
+	int threadExitCode; // Thread exit code.
+	int tempDoublePtr[3]; // Temporary memory area for double operations in runtime.
+	void *profilerBlock; // If --threadprofiling is enabled, this pointer is allocated to contain internal information about the thread state for profiling purposes.
+
+	struct pthread_copy *self;
+	void **dtv, *unused1, *unused2;
+	uint32_t sysinfo;
+	uint32_t canary, canary2;
+	uint32_t tid, pid;
+	int tsd_used, errno_val;
+	volatile int cancel, canceldisable, cancelasync;
+	int detached;
+	unsigned char *map_base;
+	uint32_t map_size;
+	void *stack;
+	uint32_t stack_size;
+	void *start_arg;
+	void *(*start)(void *);
+	void *result;
+	struct __ptcb *cancelbuf;
+	void **tsd;
+	pthread_attr_t attr;
+	volatile int dead;
+	struct {
+		volatile void *volatile head;
+		long off;
+		volatile void *volatile pending;
+	} robust_list;
+	int unblock_cancel;
+	volatile int timer_id;
+	locale_t locale;
+	volatile int killlock[2];
+	volatile int exitlock[2];
+	volatile int startlock[2];
+	unsigned long sigmask[_NSIG/8/sizeof(long)];
+	char *dlerror_buf;
+	int dlerror_flag;
+	void *stdio_locks;
+	uint32_t canary_at_end;
+	void **dtv_copy;
+};
+
+
+
 FuncType* g_func_types;
 uint32_t g_func_type_count;
 
@@ -103,6 +154,34 @@ uint32_t (*Z_envZ_testSetjmpZ_iiii)(uint32_t, uint32_t, uint32_t);
 uint32_t (*Z_envZ_saveSetjmpZ_iiiii)(uint32_t, uint32_t, uint32_t, uint32_t);
 void (*Z_envZ_emscripten_longjmpZ_vii)(uint32_t, uint32_t);
 
+//Threading
+uint32_t (*Z_envZ_emscripten_atomic_cas_u32Z_iiii)(uint32_t, uint32_t, uint32_t);
+uint32_t (*Z_envZ_emscripten_atomic_add_u32Z_iii)(uint32_t, uint32_t);
+uint32_t (*Z_envZ_emscripten_futex_wakeZ_iii)(uint32_t, uint32_t);
+uint32_t (*Z_envZ_pthread_selfZ_iv)(void);
+uint32_t (*Z_envZ_emscripten_atomic_sub_u32Z_iii)(uint32_t, uint32_t);
+uint32_t (*Z_envZ_emscripten_atomic_load_u32Z_ii)(uint32_t);
+uint32_t (*Z_envZ_emscripten_atomic_store_u32Z_iii)(uint32_t, uint32_t);
+uint32_t (*Z_envZ___clock_gettimeZ_iii)(uint32_t, uint32_t);
+uint32_t (*Z_envZ_emscripten_is_main_runtime_threadZ_iv)(void);
+uint32_t (*Z_envZ_emscripten_futex_waitZ_iiid)(uint32_t, uint32_t, double);
+void (*Z_envZ_emscripten_conditional_set_current_thread_statusZ_vii)(uint32_t, uint32_t);
+uint32_t (*Z_envZ_emscripten_has_threading_supportZ_iv)(void);
+uint32_t (*Z_envZ_pthread_createZ_iiiii)(uint32_t, uint32_t, uint32_t, uint32_t);
+uint32_t (*Z_envZ___call_mainZ_iii)(uint32_t, uint32_t);
+void (*Z_envZ_emscripten_set_thread_nameZ_vii)(uint32_t, uint32_t);
+double (*Z_envZ_emscripten_get_nowZ_dv)(void);
+void (*Z_envZ_emscripten_set_current_thread_statusZ_vi)(uint32_t);
+void (*Z_envZ___assert_failZ_viiii)(uint32_t, uint32_t, uint32_t, uint32_t);
+uint32_t (*Z_envZ_emscripten_syscallZ_iii)(uint32_t, uint32_t);
+uint32_t (*Z_envZ_gettimeofdayZ_iii)(uint32_t, uint32_t);
+uint32_t (*Z_envZ_emscripten_atomic_exchange_u32Z_iii)(uint32_t, uint32_t);
+uint32_t (*Z_envZ_emscripten_asm_const_iiiZ_iiii)(uint32_t, uint32_t, uint32_t);
+
+void notImplemented(){
+  printf("Not implemented\n");
+  abort();
+}
 
 extern "C" {
 void init();
@@ -437,6 +516,148 @@ static void wasm_set_stack()
   }
 }
 
+static std::mutex atomic_mutex;
+uint32_t Z_envZ_emscripten_atomic_cas_u32Z_iiii_impl(uint32_t ref, uint32_t expected, uint32_t desired)
+{
+  std::lock_guard<std::mutex> lock(atomic_mutex);
+  uint32_t val = i32_load(Z_envZ_memory, ref);
+  if (val == expected)
+  {
+    i32_store(Z_envZ_memory, ref, desired);
+    return val;
+  }
+  //return different value
+  return val - 1;
+}
+uint32_t Z_envZ_emscripten_atomic_add_u32Z_iii_impl(uint32_t, uint32_t)
+{
+  printf("Z_envZ_emscripten_atomic_add_u32Z_iii not implemented\n");
+  abort();
+}
+uint32_t Z_envZ_emscripten_futex_wakeZ_iii_impl(uint32_t, uint32_t)
+{
+  printf("Z_envZ_emscripten_futex_wakeZ_iii not implemented\n");
+  abort();
+}
+
+uint32_t (*_Emalloc)(uint32_t);
+static std::mutex pthread_self_mutex;
+uint32_t Z_envZ_pthread_selfZ_iv_impl(void)
+{
+  uint32_t threadDataLoc = _Emalloc(sizeof(struct pthread_copy));
+  struct pthread_copy* threadData = (struct pthread_copy*) &(Z_envZ_memory->data[threadDataLoc]);
+  memset(threadData, 0, sizeof(struct pthread_copy));
+
+  threadData->self = (struct pthread_copy*) (uintptr_t) threadDataLoc;
+  threadData->robust_list.head = &threadData->robust_list.head;
+
+  uint32_t tlsMemoryLoc = _Emalloc(128 * 4);
+  void* tlsMemory =  &(Z_envZ_memory->data[tlsMemoryLoc]);
+  memset(tlsMemory, 9, 128 * 4);
+
+  {
+    std::lock_guard<std::mutex> lock(pthread_self_mutex);
+    // Atomics.store(HEAPU32, (PThread.mainThreadBlock + 176 ) >> 2, tlsMemory); // Init thread-local-storage memory array.
+    threadData->tsd = (void**) (uintptr_t) tlsMemoryLoc;
+    // Atomics.store(HEAPU32, (PThread.mainThreadBlock + 76 ) >> 2, PThread.mainThreadBlock); // Main thread ID.
+    threadData->tid = threadDataLoc;
+    // Atomics.store(HEAPU32, (PThread.mainThreadBlock + 80 ) >> 2, PROCINFO.pid); // Process ID.
+    threadData->pid = 42;
+  }
+
+  return threadDataLoc;
+}
+uint32_t Z_envZ_emscripten_atomic_sub_u32Z_iii_impl(uint32_t, uint32_t)
+{
+  printf("Z_envZ_emscripten_atomic_sub_u32Z_iii not implemented\n");
+  abort();
+}
+uint32_t Z_envZ_emscripten_atomic_load_u32Z_ii_impl(uint32_t ref)
+{
+  std::lock_guard<std::mutex> lock(atomic_mutex);
+  return i32_load(Z_envZ_memory, ref);
+}
+uint32_t Z_envZ_emscripten_atomic_store_u32Z_iii_impl(uint32_t, uint32_t)
+{
+  printf("Z_envZ_emscripten_atomic_store_u32Z_iii not implemented\n");
+  abort();
+}
+uint32_t Z_envZ___clock_gettimeZ_iii_impl(uint32_t, uint32_t)
+{
+  printf("Z_envZ___clock_gettimeZ_iii not implemented\n");
+  abort();
+}
+uint32_t Z_envZ_emscripten_is_main_runtime_threadZ_iv_impl(void)
+{
+  printf("Z_envZ_emscripten_is_main_runtime_threadZ_iv not implemented\n");
+  abort();
+}
+uint32_t Z_envZ_emscripten_futex_waitZ_iiid_impl(uint32_t, uint32_t, double)
+{
+  printf("Z_envZ_emscripten_futex_waitZ_iiid not implemented\n");
+  abort();
+}
+void Z_envZ_emscripten_conditional_set_current_thread_statusZ_vii_impl(uint32_t, uint32_t)
+{
+  printf("Z_envZ_emscripten_conditional_set_current_thread_statusZ_vii not implemented\n");
+  abort();
+}
+uint32_t Z_envZ_emscripten_has_threading_supportZ_iv_impl(void)
+{
+  printf("Z_envZ_emscripten_has_threading_supportZ_iv not implemented\n");
+  abort();
+}
+uint32_t Z_envZ_pthread_createZ_iiiii_impl(uint32_t, uint32_t, uint32_t, uint32_t)
+{
+  printf("Z_envZ_pthread_createZ_iiiii not implemented\n");
+  abort();
+}
+uint32_t Z_envZ___call_mainZ_iii_impl(uint32_t, uint32_t)
+{
+  printf("Z_envZ___call_mainZ_iii not implemented\n");
+  abort();
+}
+void Z_envZ_emscripten_set_thread_nameZ_vii_impl(uint32_t, uint32_t)
+{
+  printf("Z_envZ_emscripten_set_thread_nameZ_vii not implemented\n");
+  abort();
+}
+double Z_envZ_emscripten_get_nowZ_dv_impl(void)
+{
+  printf("Z_envZ_emscripten_get_nowZ_dv not implemented\n");
+  abort();
+}
+void Z_envZ_emscripten_set_current_thread_statusZ_vi_impl(uint32_t)
+{
+  printf("Z_envZ_emscripten_set_current_thread_statusZ_vi not implemented\n");
+  abort();
+}
+void Z_envZ___assert_failZ_viiii_impl(uint32_t, uint32_t, uint32_t, uint32_t)
+{
+  printf("Z_envZ___assert_failZ_viiii not implemented\n");
+  abort();
+}
+uint32_t Z_envZ_emscripten_syscallZ_iii_impl(uint32_t, uint32_t)
+{
+  printf("Z_envZ_emscripten_syscallZ_iii not implemented\n");
+  abort();
+}
+uint32_t Z_envZ_gettimeofdayZ_iii_impl(uint32_t, uint32_t)
+{
+  printf("Z_envZ_gettimeofdayZ_iii not implemented\n");
+  abort();
+}
+uint32_t Z_envZ_emscripten_atomic_exchange_u32Z_iii_impl(uint32_t, uint32_t)
+{
+  printf("Z_envZ_emscripten_atomic_exchange_u32Z_iii not implemented\n");
+  abort();
+}
+uint32_t Z_envZ_emscripten_asm_const_iiiZ_iiii_impl(uint32_t, uint32_t, uint32_t)
+{
+  printf("Z_envZ_emscripten_asm_const_iiiZ_iiii not implemented\n");
+  abort();
+}
+
 void wasm_rt_allocate_memory(wasm_rt_memory_t* memory, uint32_t initial_pages, uint32_t max_pages);
 void (*_E__wasm_call_ctors)(void);
 
@@ -473,6 +694,29 @@ void wasm_init_module()
   Z_envZ_testSetjmpZ_iiii = testSetjmp;
   Z_envZ_saveSetjmpZ_iiiii = saveSetjmp;
   Z_envZ_emscripten_longjmpZ_vii = emscripten_longjmp;
+
+  Z_envZ_emscripten_atomic_cas_u32Z_iiii = Z_envZ_emscripten_atomic_cas_u32Z_iiii_impl;
+  Z_envZ_emscripten_atomic_add_u32Z_iii = Z_envZ_emscripten_atomic_add_u32Z_iii_impl;
+  Z_envZ_emscripten_futex_wakeZ_iii = Z_envZ_emscripten_futex_wakeZ_iii_impl;
+  Z_envZ_pthread_selfZ_iv = Z_envZ_pthread_selfZ_iv_impl;
+  Z_envZ_emscripten_atomic_sub_u32Z_iii = Z_envZ_emscripten_atomic_sub_u32Z_iii_impl;
+  Z_envZ_emscripten_atomic_load_u32Z_ii = Z_envZ_emscripten_atomic_load_u32Z_ii_impl;
+  Z_envZ_emscripten_atomic_store_u32Z_iii = Z_envZ_emscripten_atomic_store_u32Z_iii_impl;
+  Z_envZ___clock_gettimeZ_iii = Z_envZ___clock_gettimeZ_iii_impl;
+  Z_envZ_emscripten_is_main_runtime_threadZ_iv = Z_envZ_emscripten_is_main_runtime_threadZ_iv_impl;
+  Z_envZ_emscripten_futex_waitZ_iiid = Z_envZ_emscripten_futex_waitZ_iiid_impl;
+  Z_envZ_emscripten_conditional_set_current_thread_statusZ_vii = Z_envZ_emscripten_conditional_set_current_thread_statusZ_vii_impl;
+  Z_envZ_emscripten_has_threading_supportZ_iv = Z_envZ_emscripten_has_threading_supportZ_iv_impl;
+  Z_envZ_pthread_createZ_iiiii = Z_envZ_pthread_createZ_iiiii_impl;
+  Z_envZ___call_mainZ_iii = Z_envZ___call_mainZ_iii_impl;
+  Z_envZ_emscripten_set_thread_nameZ_vii = Z_envZ_emscripten_set_thread_nameZ_vii_impl;
+  Z_envZ_emscripten_get_nowZ_dv = Z_envZ_emscripten_get_nowZ_dv_impl;
+  Z_envZ_emscripten_set_current_thread_statusZ_vi = Z_envZ_emscripten_set_current_thread_statusZ_vi_impl;
+  Z_envZ___assert_failZ_viiii = Z_envZ___assert_failZ_viiii_impl;
+  Z_envZ_emscripten_syscallZ_iii = Z_envZ_emscripten_syscallZ_iii_impl;
+  Z_envZ_gettimeofdayZ_iii = Z_envZ_gettimeofdayZ_iii_impl;
+  Z_envZ_emscripten_atomic_exchange_u32Z_iii = Z_envZ_emscripten_atomic_exchange_u32Z_iii_impl;
+  Z_envZ_emscripten_asm_const_iiiZ_iiii = Z_envZ_emscripten_asm_const_iiiZ_iiii_impl;
 
   Z_envZ_memoryBaseZ_i = (uint32_t *) malloc(sizeof(uint32_t));
   *Z_envZ_memoryBaseZ_i = 1024u;

@@ -22,7 +22,7 @@ define convert_to_wasm =
 	for i in $$(echo $(4) | sed "s/,/ /g"); do \
 		cd $(join $(dir $${input_lib}), mainCombine)/ && llvm-ar -x $${i} && cd ..; \
 	done && \
-	emcc $(join $(dir $${input_lib}), mainCombine)/*.o -s WASM=1 -s TOTAL_MEMORY=2147418112 -s ALLOW_MEMORY_GROWTH=0 -s LEGALIZE_JS_FFI=0 -s EMULATED_FUNCTION_POINTERS=1 -s "EXPORTED_FUNCTIONS=[$$($(WASM_SANDBOX_DIR)/builds/getLLVMFileFunctions $${input_lib}), '_malloc', '_free']" -o $(2) && \
+	emcc $(join $(dir $${input_lib}), mainCombine)/*.o -s WASM=1 -s TOTAL_MEMORY=2147418112 -s ALLOW_MEMORY_GROWTH=0 -s LEGALIZE_JS_FFI=0 -s EMULATED_FUNCTION_POINTERS=1 -s USE_PTHREADS=1 -s "EXPORTED_FUNCTIONS=[$$($(WASM_SANDBOX_DIR)/builds/getLLVMFileFunctions $${input_lib}), '_malloc', '_free']" -o $(2) && \
 	$(WASM_SANDBOX_DIR)/bin/wasm2wat --inline-exports --inline-imports -f $${wasm_output} -o $${wat_output} && \
 	$(WASM_SANDBOX_DIR)/bin/wasm2c $${wasm_output} -o $${converted_c} && \
 	$(WASM_SANDBOX_DIR)/builds/generateModuleSpecificConstants $(2) > $${runtime_cpp} && \
