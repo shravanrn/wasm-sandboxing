@@ -1016,7 +1016,7 @@ void CWriter::WriteGlobals() {
     for (const Global* global : module_->globals) {
       bool is_import = global_index < module_->num_global_imports;
       if (!is_import) {
-        Write("static ");
+        Write("_Thread_local static ");
         WriteGlobal(*global, DefineGlobalScopeName(global->name));
         Write(";", Newline());
       }
