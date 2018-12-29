@@ -17,7 +17,7 @@ static thread_local WasmSandbox* CurrThreadSandbox = 0;
 WasmSandbox* WasmSandbox::createSandbox(const char* path)
 {
 	WasmSandbox* ret = new WasmSandbox();
-	ret->lib = dlopen(path, RTLD_LAZY);
+	ret->lib = dlmopen(LM_ID_NEWLM, path, RTLD_LAZY);
 
 	if(!ret->lib)
 	{
@@ -63,9 +63,12 @@ WasmSandbox* WasmSandbox::createSandbox(const char* path)
 	using wasmGetHeapBaseType = uint32_t (*)();
 	getSymbol(ret->wasm_get_heap_base, wasmGetHeapBaseType, wasm_get_heap_base);
 
+	using WasmRegisterNewPthreadType = void (*)();
+	getSymbol(ret->wasm_register_new_pthread, WasmRegisterNewPthreadType, wasm_register_new_pthread);
+
 	wasm_rt_memory_t** wasm_memory_st;
 	getSymbol(wasm_memory_st, wasm_rt_memory_t**, Z_envZ_memory);
-	
+
 	ret->wasm_memory = (*wasm_memory_st)->data;
 	ret->wasm_memory_size = (*wasm_memory_st)->size;
 	return ret;

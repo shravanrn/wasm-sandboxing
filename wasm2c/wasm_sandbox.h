@@ -92,6 +92,7 @@ private:
 	uint32_t (*wasm_get_current_indirect_call_num)();
 	void (*checkStackCookie)();
 	uint32_t (*wasm_get_heap_base)();
+	void (*wasm_register_new_pthread)();
 	void* wasm_memory;
 	size_t wasm_memory_size;
 
@@ -351,7 +352,7 @@ private:
 		class TArg, class... TArgs,
 		class... TExtraArgs
 	>
-	WasmSandboxImpl::return_argument<TFunc> invokeCallbackTarget(TFunc targetFunc, 
+	WasmSandboxImpl::return_argument<TFunc> invokeCallbackTarget(TFunc targetFunc,
 		TSandboxArgsWrapper<TSandboxArg, TSandboxArgs...> wrap1,
 		TArgsWrapper<TArg, TArgs...> wrap2,
 		TSandboxArg sandboxArg,
@@ -359,7 +360,7 @@ private:
 	)
 	{
 		auto convertedValue = convertReturnValue<TArg>(sandboxArg);
-		return invokeCallbackTarget(targetFunc, 
+		return invokeCallbackTarget(targetFunc,
 			invokeCallbackTargetHelper<TSandboxArgs...>(),
 			invokeCallbackTargetHelper<TArgs...>(),
 			args..., convertedValue
@@ -382,7 +383,7 @@ private:
 			state = callbackStateMap[callbackSlot];
 		}
 
-		auto ret = invokeCallbackTarget(convFuncPtr, 
+		auto ret = invokeCallbackTarget(convFuncPtr,
 			invokeCallbackTargetHelper<wasm_return_type<TArgs>...>(),
 			invokeCallbackTargetHelper<TArgs...>(),
 			args...,
@@ -408,7 +409,7 @@ private:
 			state = callbackStateMap[callbackSlot];
 		}
 
-		invokeCallbackTarget(convFuncPtr, 
+		invokeCallbackTarget(convFuncPtr,
 			invokeCallbackTargetHelper<wasm_return_type<TArgs>...>(),
 			invokeCallbackTargetHelper<TArgs...>(),
 			args...,
@@ -429,8 +430,12 @@ public:
 	template<typename TRet, typename... TFuncArgs, typename... TArgs>
 	TRet invokeFunction(TRet(*fnPtr)(TFuncArgs...), TArgs... params)
 	{
+		//make sure the framework is aware of the current thread
+		wasm_register_new_pthread();
+
 		jmp_buf& buff = *wasm_get_setjmp_buff();
 		int trapCode = setjmp(buff);
+
 
 		if(!trapCode)
 		{
@@ -498,7 +503,7 @@ public:
 
 	static WasmSandbox* getCurrThreadSandbox();
 	static void setCurrThreadSandbox(WasmSandbox* sandbox);
-	
+
 	inline void* getSandboxMemoryBase()
 	{
 		return wasm_memory;

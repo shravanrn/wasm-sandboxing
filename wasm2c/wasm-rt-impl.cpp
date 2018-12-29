@@ -32,6 +32,7 @@
 #include <atomic>
 #include <unistd.h>
 #include <sys/types.h>
+#include <sys/syscall.h>
 
 #define PAGE_SIZE 65536
 #define FUNC_TABLE_SIZE 1024
@@ -271,14 +272,14 @@ void nullFunc_X(uint32_t param)
   abort();
 }
 
-void nullFunc_ii(uint32_t param) 
-{ 
+void nullFunc_ii(uint32_t param)
+{
   printf("Invalid function pointer called with signature 'ii': %u\n", param);
   abort();
 }
 
-void nullFunc_iiii(uint32_t param) 
-{ 
+void nullFunc_iiii(uint32_t param)
+{
   printf("Invalid function pointer called with signature 'iiii': %u\n", param);
   abort();
 }
@@ -331,7 +332,7 @@ void setErrNo(uint32_t value)
   i32_store(Z_envZ_memory, loc, value);
 }
 
-uint32_t enlargeMemory() 
+uint32_t enlargeMemory()
 {
   return abortOnCannotGrowMemoryCalled();
 }
@@ -345,7 +346,7 @@ uint32_t getTotalMemory()
 uint32_t memcpy_big(uint32_t dest, uint32_t src, uint32_t num) {
   memcpy(&(Z_envZ_memory->data[dest]), &(Z_envZ_memory->data[src]), num);
   return dest;
-} 
+}
 
 std::map<uint32_t, std::mutex> lockMap;
 
@@ -465,7 +466,7 @@ uint32_t saveSetjmp(uint32_t env, uint32_t label, uint32_t table, uint32_t size)
   return table;
 }
 
-void emscripten_longjmp(uint32_t env, uint32_t value) 
+void emscripten_longjmp(uint32_t env, uint32_t value)
 {
   printf("emscripten_longjmp not implemented\n");
   abort();
@@ -505,17 +506,6 @@ static void wasm_set_constants()
   *Z_envZ_tempDoublePtrZ_i = tempDoublePtr;
 }
 
-static void wasm_set_stack()
-{
-  uint32_t stack = _EstackSave();
-  //wasm-ld loader sets its own stack location, while wasm2s does not
-  //to support both cases, set stack only if it isnt already set
-  if(!stack)
-  {
-    _EstackRestore(*Z_envZ_STACKTOPZ_i);
-  }
-}
-
 static std::mutex atomic_mutex;
 uint32_t Z_envZ_emscripten_atomic_cas_u32Z_iiii_impl(uint32_t ref, uint32_t expected, uint32_t desired)
 {
@@ -541,32 +531,82 @@ uint32_t Z_envZ_emscripten_futex_wakeZ_iii_impl(uint32_t, uint32_t)
 }
 
 uint32_t (*_Emalloc)(uint32_t);
-static std::mutex pthread_self_mutex;
-uint32_t Z_envZ_pthread_selfZ_iv_impl(void)
+static std::mutex pthreadSelfMutex;
+static std::mutex pidMapMutex;
+static std::map<pthread_t, uint32_t> pidMap;
+static uint32_t WasmOriginalStack = 0;
+
+void wasm_register_new_pthread()
 {
-  uint32_t threadDataLoc = _Emalloc(sizeof(struct pthread_copy));
-  struct pthread_copy* threadData = (struct pthread_copy*) &(Z_envZ_memory->data[threadDataLoc]);
-  memset(threadData, 0, sizeof(struct pthread_copy));
-
-  threadData->self = (struct pthread_copy*) (uintptr_t) threadDataLoc;
-  threadData->robust_list.head = &threadData->robust_list.head;
-
-  uint32_t tlsMemoryLoc = _Emalloc(128 * 4);
-  void* tlsMemory =  &(Z_envZ_memory->data[tlsMemoryLoc]);
-  memset(tlsMemory, 9, 128 * 4);
+  pthread_t threadId = pthread_self();
 
   {
-    std::lock_guard<std::mutex> lock(pthread_self_mutex);
+    //Check for existing threadDataLoc
+    //If found, this thread has already been initialized
+    std::lock_guard<std::mutex> lock(pidMapMutex);
+    auto it = pidMap.find(threadId);
+    if(it != pidMap.end())
+    {
+      //already created
+      return;
+    }
+  }
+
+  uint32_t threadDataLoc;
+  uint32_t stackPtr;
+  {
+    std::lock_guard<std::mutex> lock(pthreadSelfMutex);
+    //This is a new thread we don't have a stack yet
+    //But to allocate a stack, we need to call malloc which uses a stack
+    //The main stack is only used to create new stacks for each thread
+    //Switch to the main stack before we call malloc
+    _EstackRestore(WasmOriginalStack);
+    threadDataLoc = _Emalloc(sizeof(struct pthread_copy));
+    struct pthread_copy* threadData = (struct pthread_copy*) &(Z_envZ_memory->data[threadDataLoc]);
+    memset(threadData, 0, sizeof(struct pthread_copy));
+
+    threadData->self = (struct pthread_copy*) (uintptr_t) threadDataLoc;
+    threadData->robust_list.head = &threadData->robust_list.head;
+
+    uint32_t tlsMemoryLoc = _Emalloc(128 * 4);
+    void* tlsMemory =  &(Z_envZ_memory->data[tlsMemoryLoc]);
+    memset(tlsMemory, 9, 128 * 4);
+
     // Atomics.store(HEAPU32, (PThread.mainThreadBlock + 176 ) >> 2, tlsMemory); // Init thread-local-storage memory array.
     threadData->tsd = (void**) (uintptr_t) tlsMemoryLoc;
     // Atomics.store(HEAPU32, (PThread.mainThreadBlock + 76 ) >> 2, PThread.mainThreadBlock); // Main thread ID.
     threadData->tid = threadDataLoc;
     // Atomics.store(HEAPU32, (PThread.mainThreadBlock + 80 ) >> 2, PROCINFO.pid); // Process ID.
     threadData->pid = 42;
+
+    //linux default of 2 mb
+    uint32_t stackSize = 2097152;
+    stackPtr = _Emalloc(stackSize);
+    threadData->stack = (void*) (uintptr_t) stackPtr;
   }
 
-  return threadDataLoc;
+  //set the new stack
+  _EstackRestore(stackPtr);
+  {
+    //save the threadDataLoc
+    std::lock_guard<std::mutex> lock(pidMapMutex);
+    pidMap[threadId] = threadDataLoc;
+  }
 }
+
+uint32_t Z_envZ_pthread_selfZ_iv_impl(void)
+{
+  pthread_t threadId = pthread_self();
+  std::lock_guard<std::mutex> lock(pidMapMutex);
+  auto it = pidMap.find(threadId);
+  if (it == pidMap.end())
+  {
+    printf("Could not find the pthread_self structure\n");
+    abort();
+  }
+  return it->second;
+}
+
 uint32_t Z_envZ_emscripten_atomic_sub_u32Z_iii_impl(uint32_t, uint32_t)
 {
   printf("Z_envZ_emscripten_atomic_sub_u32Z_iii not implemented\n");
@@ -661,8 +701,14 @@ uint32_t Z_envZ_emscripten_asm_const_iiiZ_iiii_impl(uint32_t, uint32_t, uint32_t
 void wasm_rt_allocate_memory(wasm_rt_memory_t* memory, uint32_t initial_pages, uint32_t max_pages);
 void (*_E__wasm_call_ctors)(void);
 
+static bool WasmIsInitialized = false;
 void wasm_init_module()
 {
+  if(WasmIsInitialized)
+  {
+    printf("Module already initialized\n");
+    abort();
+  }
   Z_envZ_abortZ_vv = abortCalledVoid;
   Z_envZ_abortZ_vi = abortCalled;
   Z_envZ_abortOnCannotGrowMemoryZ_iv = abortOnCannotGrowMemoryCalled;
@@ -747,8 +793,11 @@ void wasm_init_module()
   wasm_set_constants();
 
   init();
-  
-  wasm_set_stack();
+
+  //The main stack is only used to create new stacks for each thread
+  //save this and create a new stack for the current thread
+  WasmOriginalStack = _EstackSave();
+  wasm_register_new_pthread();
 
   getErrLocation();
 
@@ -758,6 +807,7 @@ void wasm_init_module()
   checkStackCookie();
 
   _E__wasm_call_ctors();
+  WasmIsInitialized = true;
 }
 
 jmp_buf* wasm_get_setjmp_buff()
