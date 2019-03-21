@@ -26,6 +26,6 @@ define convert_to_wasm =
 	$(WASM_SANDBOX_DIR)/bin/wasm2wat --inline-exports --inline-imports -f $${wasm_output} -o $${wat_output} && \
 	$(WASM_SANDBOX_DIR)/bin/wasm2c $${wasm_output} -o $${converted_c} && \
 	$(WASM_SANDBOX_DIR)/builds/generateModuleSpecificConstants $(2) > $${runtime_cpp} && \
-	gcc $(3) -fPIC -I $(WASM_SANDBOX_DIR)/wasm2c -c $${converted_c} -o $${object_file} && \
-	g++ $(3) -std=c++11 -fPIC $(WASM_SANDBOX_DIR)/wasm2c/wasm-rt-impl.cpp $(WASM_SANDBOX_DIR)/wasm2c/wasm-rt-syscall-impl.cpp $${runtime_cpp} $${object_file} -I $(WASM_SANDBOX_DIR)/wasm2c -fPIC -shared -o $${shared_library}
+	$(CC) $(3) -fPIC -I $(WASM_SANDBOX_DIR)/wasm2c -c $${converted_c} -o $${object_file} && \
+	$(CXX) $(3) -std=c++11 -fPIC $(WASM_SANDBOX_DIR)/wasm2c/wasm-rt-impl.cpp $(WASM_SANDBOX_DIR)/wasm2c/wasm-rt-syscall-impl.cpp $${runtime_cpp} $${object_file} -I $(WASM_SANDBOX_DIR)/wasm2c -fPIC -shared -o $${shared_library}
 endef

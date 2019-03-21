@@ -547,6 +547,16 @@ void wasm_register_new_pthread()
     auto it = pidMap.find(threadId);
     if(it != pidMap.end())
     {
+      uint32_t val1 = _EstackSave();
+      uint32_t threadDataLoc = it->second;
+      struct pthread_copy* threadData = (struct pthread_copy*) &(Z_envZ_memory->data[threadDataLoc]);
+      uint32_t val2 = (uintptr_t) threadData->stack;
+
+      if(val1 != val2)
+      {
+        printf("wasm_register_new_pthread failure: %u, %u\n", val1, val2);
+        abort();
+      }
       //already created
       return;
     }
